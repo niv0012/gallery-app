@@ -137,6 +137,28 @@ def _protected_share_link_album_ids_multi(db: Session, owner_ids: list[uuid.UUID
     return set(rows)
 
 
+def _watermark_album_ids_multi(db: Session, owner_ids: list[uuid.UUID]) -> set[uuid.UUID]:
+    """Album ids (within `owner_ids`) where the studio enabled
+    `show_watermark=True` on at least one active public `ShareLink`.
+    Used by `GET /albums/shared-with-me` to tell the client whether
+    to overlay the studio logo on photos in that album.
+    """
+    if not owner_ids:
+        return set()
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    rows = db.execute(
+        select(ShareLink.album_id).where(
+            ShareLink.owner_id.in_(owner_ids),
+            ShareLink.show_watermark.is_(True),
+            ShareLink.is_revoked.is_(False),
+            (ShareLink.expires_at.is_(None)) | (ShareLink.expires_at > now),
+        )
+    ).scalars().all()
+    return {r for r in rows if r is not None}
+
+
 @router.post("", response_model=AlbumRead, status_code=status.HTTP_201_CREATED)
 def create_album(
     payload: AlbumCreate,
@@ -325,6 +347,7 @@ def list_shared_albums(
     counts = _media_counts_multi(db, owner_ids)
     covers = _cover_thumbnails_multi(db, owner_ids)
     protected_link_album_ids = _protected_share_link_album_ids_multi(db, owner_ids)
+    watermark_album_ids = _watermark_album_ids_multi(db, owner_ids)
 
     return [
         ConnectedAlbumRead.from_model(
@@ -333,6 +356,7 @@ def list_shared_albums(
             *counts.get(a.id, (0, 0)),
             cover_thumbnail_url=covers.get(a.id),
             has_protected_share_link=a.id in protected_link_album_ids,
+            show_watermark=a.id in watermark_album_ids,
         )
         for a in albums
         if a.owner_id in studios

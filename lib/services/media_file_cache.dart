@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import '../models/media_model.dart';
+import 'watermark_service.dart';
 
 /// Result of a web-safe in-memory fetch via [MediaFileCache.bytesFor].
 ///
@@ -32,10 +33,87 @@ class MediaBytesResult {
 class MediaFileCache {
   const MediaFileCache();
 
+  static const WatermarkService _watermarker = WatermarkService();
+
+  /// Only photos get the studio logo burned in. Videos are returned
+  /// untouched (no video encoder in the app).
+  bool _shouldWatermark(MediaModel media, String? watermarkUrl) =>
+      watermarkUrl != null &&
+      watermarkUrl.isNotEmpty &&
+      media.type == MediaType.photo;
+
+  /// Stable, filesystem-safe key for a logo URL (FNV-1a). Used as the
+  /// cache sub-folder so a changed logo never reuses old watermarked
+  /// files, while the file keeps its normal `<id>.<ext>` name — the name
+  /// the client sees in their gallery/share sheet.
+  String _logoKey(String url) {
+    var h = 0x811c9dc5;
+    for (final u in url.codeUnits) {
+      h ^= u;
+      h = (h * 0x01000193) & 0xFFFFFFFF;
+    }
+    return h.toRadixString(16);
+  }
+
+  String _swapExtension(String fileName, String newExt) {
+    final dot = fileName.lastIndexOf('.');
+    return dot == -1
+        ? '$fileName$newExt'
+        : '${fileName.substring(0, dot)}$newExt';
+  }
+
   /// Returns a local file path for [media], downloading it first if
   /// it's only available over the network. Returns null if there's
   /// nothing to resolve (no path at all) or the download failed.
-  Future<String?> localPathFor(MediaModel media) async {
+  ///
+  /// When [watermarkUrl] is given and [media] is a photo, the returned
+  /// file has the studio logo burned into its bottom-right corner (so it
+  /// survives Download/Share). If the watermark can't be applied this
+  /// returns null rather than the clean original.
+  Future<String?> localPathFor(
+    MediaModel media, {
+    String? watermarkUrl,
+  }) async {
+    final original = await _originalPathFor(media);
+    if (original == null || !_shouldWatermark(media, watermarkUrl)) {
+      return original;
+    }
+    return _watermarkedPathFor(media, original, watermarkUrl!);
+  }
+
+  Future<String?> _watermarkedPathFor(
+    MediaModel media,
+    String originalPath,
+    String watermarkUrl,
+  ) async {
+    try {
+      final srcExt = _extensionFor(
+        media.fileName.isNotEmpty ? media.fileName : originalPath,
+        fallback: '.jpg',
+      );
+      final outExt = WatermarkService.outputExtensionFor(srcExt);
+      final dir = Directory(
+          '${Directory.systemTemp.path}/gallery_media_cache/wm/${_logoKey(watermarkUrl)}');
+      final out = File('${dir.path}/${media.id}$outExt');
+      if (await out.exists()) return out.path;
+
+      final bytes = await File(originalPath).readAsBytes();
+      final result = await _watermarker.apply(
+        imageBytes: bytes,
+        extension: srcExt,
+        logoUrl: watermarkUrl,
+      );
+      if (result == null) return null;
+
+      await dir.create(recursive: true);
+      await out.writeAsBytes(result.bytes);
+      return out.path;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> _originalPathFor(MediaModel media) async {
     if (!media.isDisplayPathNetwork) {
       return media.displayPath.isEmpty ? null : media.displayPath;
     }
@@ -71,7 +149,32 @@ class MediaFileCache {
   /// filesystem to cache into, so this fetches [media] straight into
   /// memory and returns the raw bytes instead of a path. Returns null
   /// if there's nothing to resolve or the fetch failed.
-  Future<MediaBytesResult?> bytesFor(MediaModel media) async {
+  ///
+  /// When [watermarkUrl] is given and [media] is a photo, the studio
+  /// logo is burned into the returned bytes (see [localPathFor]).
+  Future<MediaBytesResult?> bytesFor(
+    MediaModel media, {
+    String? watermarkUrl,
+  }) async {
+    final original = await _originalBytesFor(media);
+    if (original == null || !_shouldWatermark(media, watermarkUrl)) {
+      return original;
+    }
+
+    final srcExt = _extensionFor(original.fileName, fallback: '.jpg');
+    final result = await _watermarker.apply(
+      imageBytes: original.bytes,
+      extension: srcExt,
+      logoUrl: watermarkUrl!,
+    );
+    if (result == null) return null;
+    return MediaBytesResult(
+      bytes: result.bytes,
+      fileName: _swapExtension(original.fileName, result.extension),
+    );
+  }
+
+  Future<MediaBytesResult?> _originalBytesFor(MediaModel media) async {
     final ext = _extensionFor(
       media.fileName,
       fallback: media.type == MediaType.video ? '.mp4' : '.jpg',

@@ -18,6 +18,7 @@ import '../../widgets/media/media_comments_section.dart';
 import '../../widgets/media/media_thumb_badges.dart';
 import '../../services/download_service_impl.dart';
 import '../../services/media_file_cache.dart';
+import '../../widgets/media/watermark_overlay.dart';
 import '../../providers/auth_providers.dart' show apiClientProvider;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../core/theme/theme_context.dart';
@@ -34,10 +35,19 @@ class SharedAlbumPreviewScreen extends ConsumerStatefulWidget {
   final String studioId;
   final AlbumModel album;
 
+  /// Whether the studio has enabled the watermark overlay for this gallery.
+  final bool showWatermark;
+
+  /// URL of the studio logo used as the watermark image.
+  /// Falls back to [album.studioAvatarUrl] when not explicitly supplied.
+  final String? watermarkUrl;
+
   const SharedAlbumPreviewScreen({
     super.key,
     required this.studioId,
     required this.album,
+    this.showWatermark = false,
+    this.watermarkUrl,
   });
 
   @override
@@ -103,9 +113,21 @@ class _SharedAlbumPreviewScreenState
     }
   }
 
+  /// Studio logo to watermark with, or null if this gallery has the
+  /// watermark off / no logo. Falls back to the studio avatar embedded in
+  /// the album (`ConnectedAlbumRead.studio_avatar_url`).
+  String? get _wmUrl {
+    if (!widget.showWatermark) return null;
+    final u = widget.watermarkUrl ?? widget.album.studioAvatarUrl;
+    return (u == null || u.isEmpty) ? null : u;
+  }
+
   void _openMedia(int index) {
     final media = _mediaList[index];
     final allIds = _mediaList.map((m) => m.id).toList();
+    // Use the explicitly-supplied watermark URL; fall back to the studio's
+    // avatar URL embedded in the album (set on ConnectedAlbumRead).
+    final wUrl = widget.watermarkUrl ?? widget.album.studioAvatarUrl;
 
     if (media.type == MediaType.video) {
       Navigator.of(context).pushNamed(
@@ -116,6 +138,8 @@ class _SharedAlbumPreviewScreenState
           initialIndex: index,
           mediaItems: _mediaList,
           readOnly: true,
+          showWatermark: widget.showWatermark,
+          watermarkUrl: wUrl,
         ),
       );
     } else {
@@ -126,6 +150,8 @@ class _SharedAlbumPreviewScreenState
           initialIndex: index,
           mediaItems: _mediaList,
           readOnly: true,
+          showWatermark: widget.showWatermark,
+          watermarkUrl: wUrl,
         ),
       );
     }
@@ -253,7 +279,8 @@ class _SharedAlbumPreviewScreenState
                   if (m.id != id) continue;
 
                   if (kIsWeb) {
-                    final result = await cache.bytesFor(m);
+                    final result =
+                        await cache.bytesFor(m, watermarkUrl: _wmUrl);
                     if (result == null) continue;
                     if (!context.mounted) continue;
                     await downloadService.downloadBytes(
@@ -265,7 +292,8 @@ class _SharedAlbumPreviewScreenState
                       isClientUser: true,
                     );
                   } else {
-                    final filePath = await cache.localPathFor(m);
+                    final filePath =
+                        await cache.localPathFor(m, watermarkUrl: _wmUrl);
                     if (filePath == null) continue;
                     if (!context.mounted) continue;
                     await downloadService.downloadOriginal(
@@ -381,6 +409,13 @@ class _SharedAlbumPreviewScreenState
                 children: [
                   MediaThumb(
                       media: media, cacheWidth: _columns <= 2 ? 720 : 480),
+                  if (_wmUrl != null)
+                    WatermarkOverlay(
+                      url: _wmUrl!,
+                      heightFraction: 0.16,
+                      minHeight: 12,
+                      maxHeight: 40,
+                    ),
                   if (media.type == MediaType.video)
                     Positioned(
                       right: 6,

@@ -18,6 +18,7 @@ import '../../providers/media_provider.dart';
 import '../../services/download_service.dart';
 import '../../services/download_service_impl.dart';
 import '../../services/media_file_cache.dart';
+import '../../widgets/media/watermark_overlay.dart';
 import '../../services/share_service.dart';
 import '../../services/share_service_impl.dart';
 import 'media_batch_workflows.dart';
@@ -614,25 +615,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                               isActive: i == _index,
                               isNearby: isNearby,
                               authToken: authToken,
+                              watermarkUrl: (widget.showWatermark &&
+                                      (widget.watermarkUrl?.isNotEmpty ??
+                                          false))
+                                  ? widget.watermarkUrl
+                                  : null,
                               onControllerInitialized: _onControllerChanged,
                             ),
                           ),
-                          if (widget.showWatermark && widget.watermarkUrl != null && widget.watermarkUrl!.isNotEmpty)
-                            Positioned(
-                              right: 16,
-                              bottom: 16,
-                              child: IgnorePointer(
-                                child: Opacity(
-                                  opacity: 0.7,
-                                  child: Image.network(
-                                    widget.watermarkUrl!,
-                                    height: 48,
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-                                  ),
-                                ),
-                              ),
-                            ),
                         ],
                       ),
                     ),
@@ -999,6 +989,7 @@ class _VideoPlayerItem extends StatefulWidget {
   final bool isActive;
   final bool isNearby;
   final String? authToken;
+  final String? watermarkUrl;
   final ValueChanged<VideoPlayerController?> onControllerInitialized;
 
   const _VideoPlayerItem({
@@ -1006,6 +997,7 @@ class _VideoPlayerItem extends StatefulWidget {
     required this.isActive,
     required this.isNearby,
     this.authToken,
+    this.watermarkUrl,
     required this.onControllerInitialized,
   });
 
@@ -1184,6 +1176,10 @@ class _VideoPlayerItemState extends State<_VideoPlayerItem> {
           alignment: Alignment.center,
           children: [
             VideoPlayer(_controller!),
+            // Pinned to the video frame's corner (this Stack is exactly
+            // the AspectRatio box), not the screen's.
+            if (widget.watermarkUrl != null && widget.watermarkUrl!.isNotEmpty)
+              WatermarkOverlay(url: widget.watermarkUrl!),
             if (_controller!.value.isBuffering)
               const CircularProgressIndicator(color: Colors.white),
           ],

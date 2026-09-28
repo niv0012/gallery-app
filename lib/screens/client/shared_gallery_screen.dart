@@ -23,6 +23,7 @@ import '../../widgets/inputs/custom_text_field.dart';
 import '../../services/share_service_impl.dart';
 import '../../services/download_service_impl.dart';
 import '../../services/media_file_cache.dart';
+import '../../widgets/media/watermark_overlay.dart';
 import '../../providers/auth_providers.dart'
     show apiClientProvider;
 import '../../providers/settings_provider.dart';
@@ -32,12 +33,17 @@ const _gridFileCache = MediaFileCache();
 const _gridDownloadService = DownloadServiceImpl();
 const _gridShareService = ShareServiceImpl();
 
-Future<void> _shareMultipleMedia(BuildContext context, List<MediaModel> mediaList) async {
+Future<void> _shareMultipleMedia(
+  BuildContext context,
+  List<MediaModel> mediaList, {
+  String? watermarkUrl,
+}) async {
   if (kIsWeb) {
     final bytesList = <Uint8List>[];
     final fileNames = <String>[];
     for (final m in mediaList) {
-      final result = await _gridFileCache.bytesFor(m);
+      final result =
+          await _gridFileCache.bytesFor(m, watermarkUrl: watermarkUrl);
       if (result != null) {
         bytesList.add(result.bytes);
         fileNames.add(result.fileName);
@@ -54,7 +60,8 @@ Future<void> _shareMultipleMedia(BuildContext context, List<MediaModel> mediaLis
 
   final paths = <String>[];
   for (final m in mediaList) {
-    final path = await _gridFileCache.localPathFor(m);
+    final path =
+        await _gridFileCache.localPathFor(m, watermarkUrl: watermarkUrl);
     if (path != null) paths.add(path);
   }
   if (paths.isEmpty || !context.mounted) return;
@@ -860,7 +867,12 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
                         }
                       }
                       if (itemsToShare.isEmpty || !context.mounted) return;
-                      await _shareMultipleMedia(context, itemsToShare);
+                      await _shareMultipleMedia(
+                        context,
+                        itemsToShare,
+                        watermarkUrl:
+                            data.showWatermark ? data.studioLogoUrl : null,
+                      );
                     },
                     icon: Icon(Icons.share_rounded),
                     label: Text('Share ${_selectedIds.length} items'),
@@ -883,7 +895,11 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
                         if (m.id != id) continue; // Not found
 
                         if (kIsWeb) {
-                          final result = await _gridFileCache.bytesFor(m);
+                          final result = await _gridFileCache.bytesFor(
+                            m,
+                            watermarkUrl:
+                                data.showWatermark ? data.studioLogoUrl : null,
+                          );
                           if (result == null) continue;
                           if (!context.mounted) continue;
                           await _gridDownloadService.downloadBytes(
@@ -895,7 +911,11 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
                             isClientUser: true,
                           );
                         } else {
-                          final filePath = await _gridFileCache.localPathFor(m);
+                          final filePath = await _gridFileCache.localPathFor(
+                            m,
+                            watermarkUrl:
+                                data.showWatermark ? data.studioLogoUrl : null,
+                          );
                           if (filePath == null) continue;
                           if (!context.mounted) continue;
                           await _gridDownloadService.downloadOriginal(
@@ -1172,32 +1192,12 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
                   ),
                 ),
               ),
-            if (showWatermark)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Center(
-                    child: RotationTransition(
-                      turns: const AlwaysStoppedAnimation(-25 / 360),
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                            horizontal: 4, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.black12.withValues(alpha: 0.04),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          AppStrings.appName,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.24),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+            if (showWatermark && watermarkUrl != null && watermarkUrl.isNotEmpty)
+              WatermarkOverlay(
+                url: watermarkUrl,
+                heightFraction: 0.16,
+                minHeight: 12,
+                maxHeight: 40,
               ),
             if (_selectedIds.contains(m.id))
               Positioned.fill(

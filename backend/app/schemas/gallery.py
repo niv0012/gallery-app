@@ -214,6 +214,11 @@ class ConnectedAlbumRead(BaseModel):
     # TypeError (surfaced to the client as a 500) on every request.
     has_protected_share_link: bool = False
 
+    # Whether the studio has enabled their logo watermark on this album.
+    # Carried from the active AlbumClientShare (or the album's share link)
+    # so the client viewer can overlay it without a second request.
+    show_watermark: bool = False
+
     @classmethod
     def from_model(
         cls,
@@ -223,6 +228,7 @@ class ConnectedAlbumRead(BaseModel):
         video_count: int = 0,
         cover_thumbnail_url: str | None = None,
         has_protected_share_link: bool = False,
+        show_watermark: bool = False,
     ) -> "ConnectedAlbumRead":
         return cls(
             id=album.id,
@@ -240,6 +246,7 @@ class ConnectedAlbumRead(BaseModel):
             studio_name=studio.studio_name or studio.full_name,
             studio_avatar_url=studio.avatar_url,
             has_protected_share_link=has_protected_share_link,
+            show_watermark=show_watermark,
         )
 
 

@@ -122,6 +122,15 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
   final ShareService _shareService = const ShareServiceImpl();
   final DownloadService _downloadService = const DownloadServiceImpl();
 
+  /// Studio logo to watermark with, or null when this gallery has the
+  /// watermark turned off / no logo. Used for the on-screen overlay AND
+  /// for the copy that's downloaded/shared.
+  String? get _watermarkUrl {
+    if (!widget.showWatermark) return null;
+    final u = widget.watermarkUrl;
+    return (u == null || u.isEmpty) ? null : u;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -373,7 +382,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
       }
 
       if (kIsWeb) {
-        final result = await _viewerFileCache.bytesFor(current);
+        final result = await _viewerFileCache.bytesFor(
+            current,
+            watermarkUrl: _watermarkUrl);
         if (isNetwork && context.mounted) {
           ScaffoldMessenger.of(context).hideCurrentSnackBar();
         }
@@ -396,7 +407,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
         return;
       }
 
-      final filePath = await _viewerFileCache.localPathFor(current);
+      final filePath = await _viewerFileCache.localPathFor(
+          current,
+          watermarkUrl: _watermarkUrl);
       if (isNetwork && context.mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
       }
@@ -444,7 +457,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
       }
 
       if (kIsWeb) {
-        final result = await _viewerFileCache.bytesFor(current);
+        final result = await _viewerFileCache.bytesFor(
+            current,
+            watermarkUrl: _watermarkUrl);
         if (isNetwork && context.mounted) {
           ScaffoldMessenger.of(context).hideCurrentSnackBar();
         }
@@ -469,7 +484,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
               ref.read(authStateProvider).user?.role == AppUserRole.client,
         );
       } else {
-        final filePath = await _viewerFileCache.localPathFor(current);
+        final filePath = await _viewerFileCache.localPathFor(
+          current,
+          watermarkUrl: _watermarkUrl);
         if (isNetwork && context.mounted) {
           ScaffoldMessenger.of(context).hideCurrentSnackBar();
         }
@@ -629,23 +646,12 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            Center(child: _MediaPreview(media: m)),
-                            if (widget.showWatermark && widget.watermarkUrl != null && widget.watermarkUrl!.isNotEmpty)
-                              Positioned(
-                                right: 16,
-                                bottom: 16,
-                                child: IgnorePointer(
-                                  child: Opacity(
-                                    opacity: 0.7,
-                                    child: Image.network(
-                                      widget.watermarkUrl!,
-                                      height: 48,
-                                      fit: BoxFit.contain,
-                                      errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-                                    ),
-                                  ),
-                                ),
+                            Center(
+                              child: _MediaPreview(
+                                media: m,
+                                watermarkUrl: _watermarkUrl,
                               ),
+                            ),
                           ],
                         ),
                       ),
@@ -914,7 +920,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
 
 class _MediaPreview extends StatelessWidget {
   final MediaModel media;
-  const _MediaPreview({required this.media});
+  final String? watermarkUrl;
+  const _MediaPreview({required this.media, this.watermarkUrl});
 
   @override
   Widget build(BuildContext context) {
@@ -924,7 +931,11 @@ class _MediaPreview extends StatelessWidget {
     final hasRealFile = isNetwork || (!kIsWeb && file != null && file.existsSync());
 
     if (hasRealFile && media.type == MediaType.photo) {
-      return EditedImage(media: media, fit: BoxFit.contain);
+      return EditedImage(
+        media: media,
+        fit: BoxFit.contain,
+        watermarkUrl: watermarkUrl,
+      );
     } else {
       return Container(
         decoration: BoxDecoration(

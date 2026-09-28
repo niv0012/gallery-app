@@ -63,6 +63,12 @@ class AlbumModel {
   /// is already granted directly (see 21.23's audit).
   final bool hasProtectedShareLink;
 
+  /// True when the studio enabled their logo watermark for this album
+  /// (`ConnectedAlbumRead.show_watermark`). Only set on connected/shared view
+  /// albums. When true, [studioAvatarUrl] is overlaid as a corner watermark
+  /// when the client opens a photo or video from this album.
+  final bool showWatermark;
+
   AlbumModel({
     required this.id,
     required this.name,
@@ -81,6 +87,7 @@ class AlbumModel {
     this.studioName,
     this.studioAvatarUrl,
     this.hasProtectedShareLink = false,
+    this.showWatermark = false,
   })  : createdAt = createdAt ?? updatedAt,
         gradient = gradient ??
             const [
@@ -139,6 +146,7 @@ class AlbumModel {
       studioName: json['studio_name'] as String?,
       studioAvatarUrl: json['studio_avatar_url'] as String?,
       hasProtectedShareLink: json['has_protected_share_link'] as bool? ?? false,
+      showWatermark: json['show_watermark'] as bool? ?? false,
     );
   }
 

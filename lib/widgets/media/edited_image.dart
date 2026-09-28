@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../../models/media_model.dart';
 import '../../models/edit_recipe.dart';
 import '../../core/theme/app_theme.dart';
+import 'watermark_overlay.dart';
 
 class EditedImage extends StatefulWidget {
   final MediaModel media;
@@ -15,12 +16,17 @@ class EditedImage extends StatefulWidget {
   final double? width;
   final double? height;
 
+  /// When non-null/non-empty, the studio logo is drawn in the bottom-right
+  /// corner of the *rendered image* (after crop/rotation), not the screen.
+  final String? watermarkUrl;
+
   const EditedImage({
     super.key,
     required this.media,
     this.fit = BoxFit.contain,
     this.width,
     this.height,
+    this.watermarkUrl,
   });
 
   @override
@@ -227,14 +233,21 @@ class _EditedImageState extends State<EditedImage> {
           drawH = maxH;
         }
 
+        final wm = widget.watermarkUrl;
         return SizedBox(
           width: drawW,
           height: drawH,
-          child: CustomPaint(
-            painter: _EditedImagePainter(
-              image: _image!,
-              recipe: recipe,
-            ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CustomPaint(
+                painter: _EditedImagePainter(
+                  image: _image!,
+                  recipe: recipe,
+                ),
+              ),
+              if (wm != null && wm.isNotEmpty) WatermarkOverlay(url: wm),
+            ],
           ),
         );
       },

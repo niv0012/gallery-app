@@ -282,6 +282,7 @@ class GalleryCard extends StatelessWidget {
                   builder: (_) => SharedAlbumPreviewScreen(
                     studioId: studioId,
                     album: album,
+                    showWatermark: album.showWatermark,
                   ),
                 ),
               );
@@ -452,6 +453,7 @@ class _GalleryGridTile extends StatelessWidget {
           builder: (_) => SharedAlbumPreviewScreen(
             studioId: studioId,
             album: album,
+            showWatermark: album.showWatermark,
           ),
         ),
       );
