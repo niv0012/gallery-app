@@ -10,6 +10,7 @@ import '../core/routes/app_routes.dart';
 import '../core/theme/app_theme.dart';
 import '../providers/album_provider.dart';
 import '../providers/folder_provider.dart';
+import '../services/media_picker_service.dart' show MediaContentType;
 import 'new_upload_provider.dart';
 import 'upload_queue_provider.dart';
 import 'picked_file_info.dart';
@@ -202,9 +203,42 @@ class _NewUploadScreenState extends ConsumerState<NewUploadScreen> {
         if (file == null) continue;
 
         final sizeBytes = await file.length();
-        final name =
-            asset.title ?? file.path.split(Platform.pathSeparator).last;
-        final ext = name.split('.').last;
+
+        // On iOS `AssetEntity.title` is often null *or an empty string*
+        // until it is fetched asynchronously — an empty title used to slip
+        // through `??` and the file ended up as `untitled_N` with no
+        // extension, which the backend then rejected as
+        // `application/octet-stream`.
+        var name = (asset.title ?? '').trim();
+        if (name.isEmpty) {
+          try {
+            name = (await asset.titleAsync).trim();
+          } catch (_) {}
+        }
+        if (name.isEmpty) {
+          name = file.path.split(Platform.pathSeparator).last;
+        }
+
+        // Detect the real type from the file header and make sure the name
+        // carries a matching extension (e.g. `IMG_0001` → `IMG_0001.jpg`).
+        var contentType =
+            await MediaContentType.forFile(path: file.path, fileName: name);
+        if (contentType == MediaContentType.octetStream) {
+          try {
+            final mime = await asset.mimeTypeAsync;
+            if (mime != null && mime.isNotEmpty) {
+              contentType = mime.toLowerCase();
+            }
+          } catch (_) {}
+        }
+        if (contentType == MediaContentType.octetStream) {
+          contentType = asset.type == AssetType.video
+              ? 'video/quicktime'
+              : 'image/jpeg';
+        }
+        name = MediaContentType.withExtension(name, contentType);
+        final dotIdx = name.lastIndexOf('.');
+        final ext = dotIdx >= 0 ? name.substring(dotIdx + 1) : '';
 
         // Check for duplicates
         final isDuplicate = existingJobs

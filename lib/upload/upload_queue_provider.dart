@@ -282,7 +282,11 @@ class UploadQueueController extends AsyncNotifier<UploadQueueState> {
 
     for (int i = 0; i < current.tempPickedFiles.length; i++) {
       final f = current.tempPickedFiles[i];
-      final originalName = f.name.isNotEmpty ? f.name : 'untitled_${i + 1}';
+      var originalName = f.name.trim();
+      if (originalName.isEmpty && !kIsWeb && (f.path ?? '').isNotEmpty) {
+        originalName = f.path!.split(RegExp(r'[\\/]')).last;
+      }
+      if (originalName.isEmpty) originalName = 'untitled_${i + 1}';
 
       // Rename handling
       String finalName = originalName;
@@ -588,7 +592,28 @@ class UploadQueueController extends AsyncNotifier<UploadQueueState> {
     _debouncedSave(); // non-blocking — don't delay the actual upload
 
     try {
-      final contentType = MediaContentType.forFileName(job.fileName);
+      // iOS often yields extension-less names (e.g. `untitled_1`), so the
+      // type is detected from the file's header bytes first; the extension
+      // is only a fallback. The upload name is then aligned with the type.
+      final String contentType = kIsWeb
+          ? MediaContentType.forBytesAndName(
+              job.webBytes ?? const <int>[], job.fileName)
+          : await MediaContentType.forFile(
+              path: job.filePath, fileName: job.fileName);
+      final uploadFileName =
+          MediaContentType.withExtension(job.fileName, contentType);
+      if (uploadFileName != job.fileName) {
+        final cur = state.value;
+        if (cur != null) {
+          final i = cur.jobs.indexWhere((j) => j.id == job.id);
+          if (i >= 0) {
+            final jobs = [...cur.jobs];
+            jobs[i] = jobs[i].copyWith(fileName: uploadFileName);
+            state = AsyncValue.data(cur.copyWith(jobs: jobs));
+            _debouncedSave();
+          }
+        }
+      }
 
       // Compression is permanently disabled — files are always uploaded at
       // their original quality regardless of per-job options or global
@@ -624,7 +649,7 @@ class UploadQueueController extends AsyncNotifier<UploadQueueState> {
             ? () => job.webStreamFactory!().cast<List<int>>()
             : null,
         webBlobUrl: job.webBlobUrl,
-        fileName: job.fileName,
+        fileName: uploadFileName,
         contentType: contentType,
         sizeBytes: job.totalBytes,
         albumId: job.albumId,

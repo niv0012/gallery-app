@@ -1,4 +1,7 @@
+import 'dart:io' show File;
+
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 
 import '../models/media_model.dart';
@@ -193,17 +196,23 @@ class MediaPickerService {
   }
 }
 
-/// Extension → MIME type sniffing for when neither `image_picker` nor
-/// `file_picker` hands back a content type directly. Kept in sync with
-/// the video-extension set `UploadQueueController` already uses for its
-/// (separate, Hive-based) simulated queue, so a file picked here is
-/// classified as photo/video the same way everywhere in the app.
+/// MIME type detection for picked media.
+///
+/// Order of trust: **file header bytes → filename extension →
+/// `application/octet-stream`**. The header is checked first because on iOS
+/// the picker frequently hands back a file with an empty / extension-less
+/// name (the queue then labels it `untitled_N`), so the extension alone can't
+/// be relied on.
 class MediaContentType {
   MediaContentType._();
+
+  static const String octetStream = 'application/octet-stream';
 
   static const Map<String, String> _byExtension = {
     'jpg': 'image/jpeg',
     'jpeg': 'image/jpeg',
+    'jpe': 'image/jpeg',
+    'jfif': 'image/jpeg',
     'png': 'image/png',
     'gif': 'image/gif',
     'webp': 'image/webp',
@@ -224,45 +233,136 @@ class MediaContentType {
     'ts': 'video/mp2t',
   };
 
-  /// Falls back to `application/octet-stream` for anything unrecognized
-  /// — the backend's `POST /media/upload` rejects unsupported content
-  /// types itself (see `media_upload_service.dart`), so this only needs
-  /// to be a best-effort guess, not a strict validator.
-  /// Sniffs the MIME type from the first few bytes of the file, falling back
-  /// to filename extension, and then to `application/octet-stream`.
-  static String forBytesAndName(List<int> bytes, String fileName) {
-    if (bytes.length > 4) {
-      if (bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) {
-        return 'image/jpeg';
-      }
-      if (bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) {
-        return 'image/png';
-      }
-      if (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x38) {
-        return 'image/gif';
-      }
-      if (bytes[0] == 0x00 && bytes[1] == 0x00 && bytes[2] == 0x00 && 
-          bytes.length >= 12 && bytes[4] == 0x66 && bytes[5] == 0x74 && bytes[6] == 0x79 && bytes[7] == 0x70) {
-          // ftyp
-          final brand = String.fromCharCodes(bytes.sublist(8, 12));
-          if (brand == 'heic' || brand == 'heix' || brand == 'hevc' || brand == 'heim') {
-            return 'image/heic';
-          }
-          if (brand == 'mp41' || brand == 'mp42' || brand == 'isom') {
-            return 'video/mp4';
-          }
-      }
+  static const Map<String, String> _extensionFor = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+    'image/heic': 'heic',
+    'image/heif': 'heif',
+    'image/bmp': 'bmp',
+    'video/mp4': 'mp4',
+    'video/quicktime': 'mov',
+    'video/x-m4v': 'm4v',
+    'video/x-matroska': 'mkv',
+    'video/webm': 'webm',
+    'video/x-msvideo': 'avi',
+    'video/3gpp': '3gp',
+    'video/3gpp2': '3g2',
+    'video/x-ms-wmv': 'wmv',
+    'video/mp2t': 'ts',
+  };
+
+  static String _ascii(List<int> b, int start, int end) =>
+      String.fromCharCodes(b.sublist(start, end));
+
+  /// Detects the MIME type from the leading bytes of a file, or `null` when
+  /// the signature isn't recognised.
+  static String? sniff(List<int> b) {
+    if (b.length < 4) return null;
+
+    // JPEG
+    if (b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF) return 'image/jpeg';
+    // PNG
+    if (b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47) {
+      return 'image/png';
+    }
+    // GIF
+    if (b[0] == 0x47 && b[1] == 0x49 && b[2] == 0x46 && b[3] == 0x38) {
+      return 'image/gif';
+    }
+    // Matroska / WebM (EBML header)
+    if (b[0] == 0x1A && b[1] == 0x45 && b[2] == 0xDF && b[3] == 0xA3) {
+      return 'video/x-matroska';
     }
 
-    final dot = fileName.lastIndexOf('.');
-    if (dot < 0 || dot == fileName.length - 1) {
-      return 'application/octet-stream';
+    if (b.length >= 12) {
+      final head = _ascii(b, 0, 4);
+      final tag = _ascii(b, 8, 12);
+      // RIFF containers: WebP / AVI
+      if (head == 'RIFF') {
+        if (tag == 'WEBP') return 'image/webp';
+        if (tag == 'AVI ') return 'video/x-msvideo';
+      }
+      // ISO base media (`ftyp` box): HEIC/HEIF photos, MP4/MOV/3GP videos
+      if (_ascii(b, 4, 8) == 'ftyp') {
+        final brand = tag;
+        const heic = {'heic', 'heix', 'hevc', 'hevx', 'heim', 'heis'};
+        const heif = {'mif1', 'msf1', 'heif'};
+        if (heic.contains(brand)) return 'image/heic';
+        if (heif.contains(brand)) return 'image/heif';
+        if (brand == 'qt  ') return 'video/quicktime';
+        if (brand.startsWith('M4V')) return 'video/x-m4v';
+        if (brand.startsWith('3gp')) return 'video/3gpp';
+        if (brand.startsWith('3g2')) return 'video/3gpp2';
+        if (brand.startsWith('M4A') || brand.startsWith('M4B')) return null;
+        if (brand == 'avif' || brand == 'avis') return null;
+        // isom, iso2, mp41, mp42, avc1, dash, mmp4, ...
+        return 'video/mp4';
+      }
     }
-    final ext = fileName.substring(dot + 1).toLowerCase();
-    return _byExtension[ext] ?? 'application/octet-stream';
+    return null;
   }
 
-  static String forFileName(String fileName) {
-    return forBytesAndName([], fileName);
+  static String? _fromExtension(String fileName) {
+    final dot = fileName.lastIndexOf('.');
+    if (dot < 0 || dot == fileName.length - 1) return null;
+    return _byExtension[fileName.substring(dot + 1).toLowerCase()];
+  }
+
+  /// Sniffs [bytes] first, then falls back to the extension of [fileName],
+  /// then to `application/octet-stream`.
+  static String forBytesAndName(List<int> bytes, String fileName) {
+    final sniffed = sniff(bytes);
+    final byName = _fromExtension(fileName);
+    // Matroska and WebM share a header — trust the extension to tell apart.
+    if (sniffed == 'video/x-matroska' && byName == 'video/webm') return byName!;
+    return sniffed ?? byName ?? octetStream;
+  }
+
+  static String forFileName(String fileName) =>
+      _fromExtension(fileName) ?? octetStream;
+
+  /// Native-file variant of [forBytesAndName]: reads only the first bytes of
+  /// the file at [path]. Never throws — on any read problem it falls back to
+  /// the extension of [fileName] (or of [path]).
+  static Future<String> forFile({
+    required String? path,
+    required String fileName,
+  }) async {
+    List<int> head = const [];
+    if (!kIsWeb && path != null && path.isNotEmpty) {
+      try {
+        final raf = await File(path).open();
+        try {
+          head = await raf.read(32);
+        } finally {
+          await raf.close();
+        }
+      } catch (_) {
+        head = const [];
+      }
+    }
+    var type = forBytesAndName(head, fileName);
+    if (type == octetStream && path != null && path.isNotEmpty) {
+      type = _fromExtension(path) ?? octetStream;
+    }
+    return type;
+  }
+
+  /// Returns [fileName] guaranteed to carry an extension that matches
+  /// [contentType] (`untitled_1` + `image/jpeg` → `untitled_1.jpg`; a
+  /// `.heic` name on JPEG data → `.jpg`). Unchanged when [contentType] is
+  /// unknown or the name already agrees with it.
+  static String withExtension(String fileName, String contentType) {
+    final ext = _extensionFor[contentType];
+    if (ext == null) return fileName;
+    if (_fromExtension(fileName) == contentType) return fileName;
+    // `.mkv` vs `.webm` etc. — same family already agreed via forBytesAndName.
+    final dot = fileName.lastIndexOf('.');
+    final hasExt = dot > 0 && dot < fileName.length - 1 &&
+        _byExtension.containsKey(fileName.substring(dot + 1).toLowerCase());
+    final base = hasExt ? fileName.substring(0, dot) : fileName;
+    return '$base.$ext';
   }
 }
