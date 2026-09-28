@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/theme_context.dart';
 
 /// The action the user picked from [AddMediaBottomSheet].
 enum AddMediaAction { photos, videos }
@@ -19,7 +20,7 @@ class AddMediaBottomSheet extends StatelessWidget {
     return showModalBottomSheet<AddMediaAction>(
       context: context,
       showDragHandle: true,
-      backgroundColor: Colors.white,
+      backgroundColor: context.surfaceColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
       ),
@@ -112,7 +113,7 @@ class _ActionTile extends StatelessWidget {
           padding: EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: context.borderColor),
           ),
           child: Row(
             children: [

@@ -8,6 +8,7 @@ import '../../providers/folder_provider.dart';
 import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/empty_state_card.dart';
 import '../../widgets/common/loading_widget.dart';
+import '../../core/theme/theme_context.dart';
 
 /// File-browser style entry point for a folder's contents.
 ///
@@ -103,9 +104,9 @@ class _FolderGridTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.9),
+          color: context.surfaceColor.withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: context.borderColor),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -127,18 +128,18 @@ class _FolderGridTile extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
-                  color: AppColors.text),
+                  color: context.textPrimary),
             ),
             const SizedBox(height: 2),
             Text(
               '${folder.albumCount} ${folder.albumCount == 1 ? 'item' : 'items'}',
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.subtitle),
+                  color: context.textMuted),
             ),
           ],
         ),

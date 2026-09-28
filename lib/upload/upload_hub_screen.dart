@@ -5,6 +5,7 @@ import '../core/routes/app_routes.dart';
 import '../core/theme/app_theme.dart';
 import 'upload_queue_provider.dart';
 import 'upload_job_model.dart';
+import 'widgets/dismissible_upload_tile.dart';
 import 'widgets/upload_queue_tile.dart';
 
 class UploadHubScreen extends ConsumerWidget {
@@ -70,7 +71,11 @@ class UploadHubScreen extends ConsumerWidget {
               children: [
                 if (activeJobs.isNotEmpty)
                   _buildSectionHeader('Active', isDark),
-                ...activeJobs.map((job) => UploadQueueTile(
+                ...activeJobs.map((job) => DismissibleUploadTile(
+                      job: job,
+                      onRemove: () => notifier.removeJob(job.id),
+                      onRestore: () => notifier.restoreJob(job),
+                      child: UploadQueueTile(
                       job: job,
                       speedBytesPerSecond: data.speedBytesPerSecond,
                       remainingTime: data.remainingTime,
@@ -78,24 +83,35 @@ class UploadHubScreen extends ConsumerWidget {
                       onPause: () => notifier.pauseJob(job.id),
                       onResume: () => notifier.resumeJob(job.id),
                       onRetry: () => notifier.retryJob(job.id),
+                    ),
                     )),
                 if (failedJobs.isNotEmpty)
                   _buildSectionHeader('Failed or Canceled', isDark),
-                ...failedJobs.map((job) => UploadQueueTile(
+                ...failedJobs.map((job) => DismissibleUploadTile(
+                      job: job,
+                      onRemove: () => notifier.removeJob(job.id),
+                      onRestore: () => notifier.restoreJob(job),
+                      child: UploadQueueTile(
                       job: job,
                       onCancel: () => notifier.cancelJob(job.id),
                       onPause: () => notifier.pauseJob(job.id),
                       onResume: () => notifier.resumeJob(job.id),
                       onRetry: () => notifier.retryJob(job.id),
+                    ),
                     )),
                 if (completedJobs.isNotEmpty)
                   _buildSectionHeader('Completed', isDark),
-                ...completedJobs.map((job) => UploadQueueTile(
+                ...completedJobs.map((job) => DismissibleUploadTile(
+                      job: job,
+                      onRemove: () => notifier.removeJob(job.id),
+                      onRestore: () => notifier.restoreJob(job),
+                      child: UploadQueueTile(
                       job: job,
                       onCancel: () => notifier.cancelJob(job.id),
                       onPause: () => notifier.pauseJob(job.id),
                       onResume: () => notifier.resumeJob(job.id),
                       onRetry: () => notifier.retryJob(job.id),
+                    ),
                     )),
                 if (data.jobs.isEmpty)
                   Padding(

@@ -13,6 +13,7 @@ import '../../widgets/common/loading_widget.dart';
 import '../../widgets/common/highlighted_text.dart';
 import 'media_grid_screen.dart';
 import 'media_details_screen.dart';
+import '../../core/theme/theme_context.dart';
 
 class MediaSearchScreen extends ConsumerStatefulWidget {
   final MediaSearchArgs? initialArgs;
@@ -189,7 +190,7 @@ class _MediaSearchScreenState extends ConsumerState<MediaSearchScreen>
                             itemBuilder: (context, i) {
                               final m = results[i];
                               return Material(
-                                color: Colors.white,
+                                color: context.surfaceColor,
                                 borderRadius:
                                     BorderRadius.circular(AppRadius.lg),
                                 borderOnForeground: true,
@@ -218,7 +219,7 @@ class _MediaSearchScreenState extends ConsumerState<MediaSearchScreen>
                                             borderRadius: BorderRadius.circular(
                                                 AppRadius.md),
                                             border: Border.all(
-                                                color: AppColors.border),
+                                                color: context.borderColor),
                                             gradient: LinearGradient(
                                               colors: [
                                                 Color(m.gradientArgb.first),

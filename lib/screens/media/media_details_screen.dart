@@ -29,6 +29,7 @@ import '../../widgets/common/empty_state_card.dart';
 import 'image_viewer_screen.dart';
 import 'media_batch_workflows.dart';
 import 'video_player_screen.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Route arguments for [MediaDetailsScreen].
 ///
@@ -742,7 +743,7 @@ class _DetailsActionChip extends StatelessWidget {
       backgroundColor: (Theme.of(context).brightness == Brightness.dark
           ? AppColors.darkSurface
           : AppColors.surface),
-      side: const BorderSide(color: AppColors.border),
+      side: BorderSide(color: context.borderColor),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.pill),
       ),

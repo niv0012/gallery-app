@@ -36,6 +36,7 @@ class ImageViewerArgs {
   final bool showWatermark;
   final bool allowDownload;
   final String? shareLinkId;
+  final String? watermarkUrl;
 
   /// Pre-fetched media to display instead of resolving [mediaIds] against
   /// `mediaProvider`. Required for any caller whose media isn't in the
@@ -60,6 +61,7 @@ class ImageViewerArgs {
     this.showWatermark = false,
     this.allowDownload = true,
     this.shareLinkId,
+    this.watermarkUrl,
     this.mediaItems,
     this.readOnly = false,
   });
@@ -78,6 +80,7 @@ class ImageViewerScreen extends ConsumerStatefulWidget {
   final bool showWatermark;
   final bool allowDownload;
   final String? shareLinkId;
+  final String? watermarkUrl;
   final List<MediaModel>? mediaItems;
   final bool readOnly;
 
@@ -88,6 +91,7 @@ class ImageViewerScreen extends ConsumerStatefulWidget {
     this.showWatermark = false,
     this.allowDownload = true,
     this.shareLinkId,
+    this.watermarkUrl,
     this.mediaItems,
     this.readOnly = false,
   });
@@ -626,33 +630,18 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
                           fit: StackFit.expand,
                           children: [
                             Center(child: _MediaPreview(media: m)),
-                            if (widget.showWatermark)
-                              Positioned.fill(
+                            if (widget.showWatermark && widget.watermarkUrl != null && widget.watermarkUrl!.isNotEmpty)
+                              Positioned(
+                                right: 16,
+                                bottom: 16,
                                 child: IgnorePointer(
-                                  child: Center(
-                                    child: RotationTransition(
-                                      turns: const AlwaysStoppedAnimation(
-                                          -25 / 360),
-                                      child: Container(
-                                        padding: EdgeInsets.symmetric(
-                                            horizontal: 16, vertical: 8),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black12
-                                              .withValues(alpha: 0.04),
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                        ),
-                                        child: Text(
-                                          AppStrings.appName,
-                                          style: TextStyle(
-                                            color:
-                                                Colors.white.withValues(alpha: 0.24),
-                                            fontSize: 28,
-                                            fontWeight: FontWeight.w900,
-                                            letterSpacing: 2.5,
-                                          ),
-                                        ),
-                                      ),
+                                  child: Opacity(
+                                    opacity: 0.7,
+                                    child: Image.network(
+                                      widget.watermarkUrl!,
+                                      height: 48,
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
                                     ),
                                   ),
                                 ),
@@ -787,11 +776,12 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
                                   runSpacing: AppSpacing.xs + 2,
                                   alignment: WrapAlignment.center,
                                   children: [
-                                    _ActionChip(
-                                      icon: Icons.ios_share_rounded,
-                                      label: 'Share',
-                                      onTap: shareCurrent,
-                                    ),
+                                    if (widget.allowDownload)
+                                      _ActionChip(
+                                        icon: Icons.ios_share_rounded,
+                                        label: 'Share',
+                                        onTap: shareCurrent,
+                                      ),
                                     if (widget.allowDownload)
                                       _ActionChip(
                                         icon: Icons.download_rounded,

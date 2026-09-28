@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/admin_dashboard_data.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Single row in the Notifications section — a colored, type-specific
 /// gradient icon badge (reminder / approval / gallery-viewed),
@@ -86,25 +87,25 @@ class NotificationTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(data.title,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 13.5,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.text)),
+                            color: context.textPrimary)),
                     const SizedBox(height: 2),
                     Text(data.subtitle,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
-                            color: AppColors.subtitle)),
+                            color: context.textMuted)),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
               Text(data.time,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.subtitle)),
+                      color: context.textMuted)),
             ],
           ),
         ),

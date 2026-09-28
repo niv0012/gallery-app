@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Floating top bar for the Studio Admin Dashboard — a gradient initials
 /// avatar, a two-line "Good Morning / Studio Name" greeting, and glass
@@ -86,10 +87,10 @@ class AdminTopBar extends StatelessWidget {
               const SizedBox(height: 3),
               Text(
                 studioName,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 21,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.text,
+                  color: context.textPrimary,
                   letterSpacing: -0.3,
                   height: 1.1,
                 ),
@@ -126,15 +127,15 @@ class _ActionButton extends StatelessWidget {
         width: 46,
         height: 46,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.85),
+          color: context.surfaceColor.withValues(alpha: 0.85),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: context.borderColor),
           boxShadow:
               AppShadows.soft(AppColors.primary, opacity: 0.08, blur: 14, y: 5),
         ),
         child: Stack(
           children: [
-            Center(child: Icon(icon, size: 21, color: AppColors.text)),
+            Center(child: Icon(icon, size: 21, color: context.textPrimary)),
             if (showDot)
               Positioned(
                 top: 11,

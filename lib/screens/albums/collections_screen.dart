@@ -21,6 +21,7 @@ import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/delete_confirmation_dialog.dart';
 import '../../widgets/common/snackbar_helper.dart';
 import '../../widgets/common/empty_state_card.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Collections module.
 ///
@@ -1097,7 +1098,7 @@ class _CollectionPickerSheet extends StatelessWidget {
         margin: EdgeInsets.all(AppSpacing.md),
         constraints: const BoxConstraints(maxHeight: 420),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(AppRadius.lg),
         ),
         child: Column(
@@ -1108,7 +1109,7 @@ class _CollectionPickerSheet extends StatelessWidget {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.border,
+                color: context.borderColor,
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
@@ -1188,9 +1189,9 @@ class _EmptySection extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.all(AppSpacing.xl),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: context.borderColor),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1259,7 +1260,7 @@ class _ErrorSection extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.all(AppSpacing.xl),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(AppRadius.lg),
           border: Border.all(color: AppColors.error.withValues(alpha: 0.25)),
         ),
@@ -1383,7 +1384,7 @@ class _SkeletonBox extends StatelessWidget {
       width: width,
       height: height,
       decoration: BoxDecoration(
-        color: AppColors.border,
+        color: context.borderColor,
         borderRadius: BorderRadius.circular(radius),
       ),
     );
@@ -1426,9 +1427,9 @@ class _ShimmerState extends State<_Shimmer>
               begin: Alignment(-1.5 + 3 * t, 0),
               end: Alignment(-0.5 + 3 * t, 0),
               colors: [
-                AppColors.border,
+                context.borderColor,
                 Colors.white.withValues(alpha: 0.9),
-                AppColors.border,
+                context.borderColor,
               ],
             ).createShader(bounds);
           },

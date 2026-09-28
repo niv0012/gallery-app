@@ -12,6 +12,7 @@ import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/inline_error_banner.dart';
 import '../../widgets/common/screen_backdrop.dart';
 import '../../widgets/inputs/custom_text_field.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Reset Password: a large gradient illustration, a Reset Code field,
 /// New Password / Confirm Password fields and a gradient Reset Password
@@ -130,7 +131,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                     style: Theme.of(context)
                         .textTheme
                         .bodyLarge
-                        ?.copyWith(color: AppColors.subtitle),
+                        ?.copyWith(color: context.textMuted),
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   if (_errorMessage != null) ...[

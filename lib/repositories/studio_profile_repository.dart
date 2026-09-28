@@ -54,6 +54,11 @@ class StudioProfileRepository {
         bytes: bytes, fileName: fileName, contentType: contentType);
   }
 
+  /// Removes the studio's logo via `DELETE /studios/me/avatar`.
+  Future<void> deleteAvatar() async {
+    await _apiClient.delete('/studios/me/avatar');
+  }
+
   /// Uploads/replaces the studio's cover photo via `POST /studios/me/cover`.
   /// Returns the new `cover_image_url` to display immediately.
   Future<String?> uploadCover({

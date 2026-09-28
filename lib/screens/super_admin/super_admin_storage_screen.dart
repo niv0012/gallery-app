@@ -9,6 +9,7 @@ import '../../core/utils/csv_utils.dart';
 import '../../core/utils/format_utils.dart';
 import 'super_admin_dashboard_screen.dart' show kStorageWarningThreshold, kStorageCriticalThreshold;
 import 'super_admin_user_detail_screen.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Screen displaying platform-wide storage usage against 24TB total capacity,
 /// with a breakdown of top storage users sorted by heaviest usage.
@@ -77,26 +78,26 @@ class _SuperAdminStorageScreenState extends State<SuperAdminStorageScreen> {
     final pct = widget.storageSummary.usedPercentage;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.bgColor,
         elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.text),
+        iconTheme: IconThemeData(color: context.textPrimary),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.text),
+          icon: Icon(Icons.arrow_back_rounded, color: context.textPrimary),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
+        title: Text(
           'Storage Overview',
           style: TextStyle(
-            color: AppColors.text,
+            color: context.textPrimary,
             fontWeight: FontWeight.w700,
             fontSize: 19,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.ios_share_rounded, color: AppColors.text),
+            icon: Icon(Icons.ios_share_rounded, color: context.textPrimary),
             tooltip: 'Export CSV',
             onPressed: () => _exportCsv(filteredUsers),
           ),
@@ -133,8 +134,8 @@ class _SuperAdminStorageScreenState extends State<SuperAdminStorageScreen> {
                         pct >= kStorageCriticalThreshold
                             ? 'Storage critically full — ${pct.toStringAsFixed(1)}% used. Uploads may start failing.'
                             : 'Storage nearly full — ${pct.toStringAsFixed(1)}% used (${formatBytes(used)} of ${formatBytes(total)})',
-                        style: const TextStyle(
-                          color: AppColors.text,
+                        style: TextStyle(
+                          color: context.textPrimary,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
@@ -255,18 +256,18 @@ class _SuperAdminStorageScreenState extends State<SuperAdminStorageScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'Storage by User',
                   style: TextStyle(
-                    color: AppColors.text,
+                    color: context.textPrimary,
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 Text(
                   '${usersWithStorage.length} Users',
-                  style: const TextStyle(
-                    color: AppColors.subtitle,
+                  style: TextStyle(
+                    color: context.textMuted,
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
                   ),
@@ -281,16 +282,16 @@ class _SuperAdminStorageScreenState extends State<SuperAdminStorageScreen> {
               onChanged: (val) => setState(() {
                 _searchQuery = val.trim();
               }),
-              style: const TextStyle(color: AppColors.text, fontSize: 14),
+              style: TextStyle(color: context.textPrimary, fontSize: 14),
               decoration: InputDecoration(
                 hintText: 'Search user by name or email...',
-                hintStyle: const TextStyle(color: AppColors.subtitle),
-                prefixIcon: const Icon(Icons.search_rounded,
-                    color: AppColors.subtitle, size: 20),
+                hintStyle: TextStyle(color: context.textMuted),
+                prefixIcon: Icon(Icons.search_rounded,
+                    color: context.textMuted, size: 20),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear_rounded,
-                            color: AppColors.subtitle, size: 18),
+                        icon: Icon(Icons.clear_rounded,
+                            color: context.textMuted, size: 18),
                         onPressed: () {
                           _searchController.clear();
                           setState(() {
@@ -300,16 +301,16 @@ class _SuperAdminStorageScreenState extends State<SuperAdminStorageScreen> {
                       )
                     : null,
                 filled: true,
-                fillColor: AppColors.surfaceElevated,
+                fillColor: context.surfaceColor,
                 contentPadding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.md, vertical: 12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppRadius.md),
-                  borderSide: const BorderSide(color: AppColors.border),
+                  borderSide: BorderSide(color: context.borderColor),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppRadius.md),
-                  borderSide: const BorderSide(color: AppColors.border),
+                  borderSide: BorderSide(color: context.borderColor),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppRadius.md),
@@ -325,18 +326,18 @@ class _SuperAdminStorageScreenState extends State<SuperAdminStorageScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(AppSpacing.xl),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceElevated,
+                  color: context.surfaceColor,
                   borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(color: AppColors.border),
+                  border: Border.all(color: context.borderColor),
                 ),
-                child: const Column(
+                child: Column(
                   children: [
                     Icon(Icons.storage_rounded,
-                        color: AppColors.subtitle, size: 36),
+                        color: context.textMuted, size: 36),
                     SizedBox(height: 8),
                     Text(
                       'No storage records match your search.',
-                      style: TextStyle(color: AppColors.subtitle, fontSize: 13.5),
+                      style: TextStyle(color: context.textMuted, fontSize: 13.5),
                     ),
                   ],
                 ),
@@ -353,9 +354,9 @@ class _SuperAdminStorageScreenState extends State<SuperAdminStorageScreen> {
 
                   return Container(
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceElevated,
+                      color: context.surfaceColor,
                       borderRadius: BorderRadius.circular(AppRadius.md),
-                      border: Border.all(color: AppColors.border),
+                      border: Border.all(color: context.borderColor),
                     ),
                     child: ListTile(
                       onTap: () => Navigator.of(context).push(
@@ -375,16 +376,16 @@ class _SuperAdminStorageScreenState extends State<SuperAdminStorageScreen> {
                       ),
                       title: Text(
                         user.fullName,
-                        style: const TextStyle(
-                          color: AppColors.text,
+                        style: TextStyle(
+                          color: context.textPrimary,
                           fontWeight: FontWeight.w600,
                           fontSize: 14.5,
                         ),
                       ),
                       subtitle: Text(
                         '${user.isStudio ? "Studio" : "Client"} • ${user.email}',
-                        style: const TextStyle(
-                          color: AppColors.subtitle,
+                        style: TextStyle(
+                          color: context.textMuted,
                           fontSize: 12,
                         ),
                         maxLines: 1,
@@ -402,7 +403,7 @@ class _SuperAdminStorageScreenState extends State<SuperAdminStorageScreen> {
                         child: Text(
                           formatBytes(bytes),
                           style: TextStyle(
-                            color: bytes > 0 ? AppColors.primary : AppColors.subtitle,
+                            color: bytes > 0 ? AppColors.primary : context.textMuted,
                             fontWeight: FontWeight.w700,
                             fontSize: 13,
                           ),

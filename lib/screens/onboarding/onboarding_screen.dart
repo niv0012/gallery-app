@@ -9,6 +9,7 @@ import '../../widgets/common/screen_backdrop.dart';
 import 'onboarding_page_1.dart';
 import 'onboarding_page_2.dart';
 import 'onboarding_page_3.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Three premium onboarding pages — [OnboardingPage1], [OnboardingPage2]
 /// and [OnboardingPage3] — behind a single [PageView], with an animated
@@ -84,7 +85,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     child: Text(
                       'Skip',
                       style: TextStyle(
-                        color: isLast ? Colors.transparent : AppColors.subtitle,
+                        color: isLast ? Colors.transparent : context.textMuted,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -113,7 +114,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     height: 8,
                     decoration: BoxDecoration(
                       gradient: active ? AppColors.buttonGradient : null,
-                      color: active ? null : AppColors.border,
+                      color: active ? null : context.borderColor,
                       borderRadius: BorderRadius.circular(8),
                     ),
                   );

@@ -21,7 +21,17 @@ class MediaThumb extends StatelessWidget {
   final MediaModel media;
   final BoxFit fit;
 
-  const MediaThumb({super.key, required this.media, this.fit = BoxFit.cover});
+  /// Decode width in physical pixels. Grid tiles never need the full
+  /// original decoded in memory; 480 keeps thumbnails sharp while cutting
+  /// memory use and scroll jank. Pass a larger value for hero-sized uses.
+  final int cacheWidth;
+
+  const MediaThumb({
+    super.key,
+    required this.media,
+    this.fit = BoxFit.cover,
+    this.cacheWidth = 480,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -32,9 +42,13 @@ class MediaThumb extends StatelessWidget {
 
     if (media.type == MediaType.photo) {
       if (isNetwork) {
+        // Prefer the server-generated thumbnail over the full original.
+        final thumb = media.remoteThumbnailUrl;
+        final url = (thumb != null && thumb.isNotEmpty) ? thumb : path;
         return Image.network(
-          path,
+          url,
           fit: fit,
+          cacheWidth: cacheWidth,
           errorBuilder: (context, error, stackTrace) =>
               _Placeholder(media: media),
         );
@@ -43,6 +57,7 @@ class MediaThumb extends StatelessWidget {
         return Image.file(
           File(path),
           fit: fit,
+          cacheWidth: cacheWidth,
           errorBuilder: (context, error, stackTrace) =>
               _Placeholder(media: media),
         );
@@ -55,6 +70,7 @@ class MediaThumb extends StatelessWidget {
         return Image.network(
           thumbPath,
           fit: fit,
+          cacheWidth: cacheWidth,
           errorBuilder: (context, error, stackTrace) =>
               VideoFallbackThumbnail(media: media, fit: fit),
         );
@@ -64,6 +80,7 @@ class MediaThumb extends StatelessWidget {
         return Image.file(
           File(thumbPath),
           fit: fit,
+          cacheWidth: cacheWidth,
           errorBuilder: (context, error, stackTrace) =>
               _Placeholder(media: media),
         );

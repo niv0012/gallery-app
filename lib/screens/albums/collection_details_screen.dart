@@ -13,6 +13,7 @@ import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/delete_confirmation_dialog.dart';
 import '../../widgets/common/snackbar_helper.dart';
 import '../../widgets/common/loading_widget.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Collection Details screen.
 ///
@@ -342,10 +343,10 @@ class _CollectionDetailsScreenState
                                               AppRadius.lg),
                                           border: Border.all(
                                             color: already
-                                                ? AppColors.border
+                                                ? context.borderColor
                                                 : isSelected
                                                     ? AppColors.primary
-                                                    : AppColors.border,
+                                                    : context.borderColor,
                                             width: 1,
                                           ),
                                           gradient: LinearGradient(
@@ -550,7 +551,7 @@ class _GalleryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: context.surfaceColor,
       borderRadius: BorderRadius.circular(AppRadius.md),
       elevation: 0,
       child: InkWell(

@@ -11,6 +11,7 @@ import '../../core/utils/media_format_utils.dart';
 import '../../models/media_model.dart';
 import '../../screens/media/image_viewer_screen.dart';
 import '../../screens/media/video_player_screen.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Lightweight 'Download Complete' bottom sheet shown after a successful download or save.
 /// Displays media thumbnail, file name, formatted size, and two action buttons:
@@ -195,7 +196,7 @@ class DownloadCompleteBottomSheet extends StatelessWidget {
         AppSpacing.lg,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         boxShadow: AppShadows.soft(AppColors.primary),
       ),
@@ -209,7 +210,7 @@ class DownloadCompleteBottomSheet extends StatelessWidget {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.border,
+                color: context.borderColor,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -240,14 +241,14 @@ class DownloadCompleteBottomSheet extends StatelessWidget {
                       'Download Complete',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.bold,
-                            color: AppColors.text,
+                            color: context.textPrimary,
                           ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Saved to your local device',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppColors.subtitle,
+                            color: context.textMuted,
                           ),
                     ),
                   ],
@@ -261,9 +262,9 @@ class DownloadCompleteBottomSheet extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
-              color: AppColors.background,
+              color: context.bgColor,
               borderRadius: BorderRadius.circular(AppRadius.md),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: context.borderColor),
             ),
             child: Row(
               children: [
@@ -280,14 +281,14 @@ class DownloadCompleteBottomSheet extends StatelessWidget {
                         style:
                             Theme.of(context).textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.w600,
-                                  color: AppColors.text,
+                                  color: context.textPrimary,
                                 ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         MediaFormatUtils.formatFileSize(size),
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AppColors.subtitle,
+                              color: context.textMuted,
                             ),
                       ),
                     ],
@@ -320,8 +321,8 @@ class DownloadCompleteBottomSheet extends StatelessWidget {
           // Secondary Action: View in Download History
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.text,
-              side: const BorderSide(color: AppColors.border),
+              foregroundColor: context.textPrimary,
+              side: BorderSide(color: context.borderColor),
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppRadius.md),

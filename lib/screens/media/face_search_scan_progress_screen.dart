@@ -8,6 +8,7 @@ import '../../core/routes/app_routes.dart';
 import '../../core/theme/app_theme.dart';
 import '../../widgets/common/custom_app_bar.dart';
 import '../../providers/face_search_provider.dart';
+import '../../core/theme/theme_context.dart';
 
 class FaceSearchScanProgressScreen extends ConsumerStatefulWidget {
   final XFile file;
@@ -116,9 +117,9 @@ class _FaceSearchScanProgressScreenState
     return Container(
       padding: EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.borderColor),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

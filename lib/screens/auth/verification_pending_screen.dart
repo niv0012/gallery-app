@@ -11,6 +11,7 @@ import '../../widgets/common/app_popup.dart';
 import '../../widgets/common/auth_container.dart';
 import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/screen_backdrop.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Blocked-state counterpart to `email_verification_screen.dart`. That
 /// screen is the initial "we just sent it" confirmation right after
@@ -140,7 +141,7 @@ class _VerificationPendingScreenState
                   style: Theme.of(context)
                       .textTheme
                       .bodyLarge
-                      ?.copyWith(color: AppColors.subtitle),
+                      ?.copyWith(color: context.textMuted),
                 ),
                 const SizedBox(height: AppSpacing.xxl),
                 GradientButton(

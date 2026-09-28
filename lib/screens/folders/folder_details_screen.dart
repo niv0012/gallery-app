@@ -5,6 +5,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/folder_cover_utils.dart';
+import '../../models/folder_model.dart';
 import '../../models/media_model.dart';
 import '../../providers/album_provider.dart';
 import '../../providers/folder_provider.dart';
@@ -16,6 +17,10 @@ import '../../widgets/common/folder_tile.dart';
 import '../../widgets/media/media_thumb.dart';
 import '../../widgets/studio/share_with_client_sheet.dart';
 import '../media/media_grid_screen.dart';
+import '../../core/theme/theme_context.dart';
+import 'dart:typed_data';
+import '../../providers/auth_providers.dart' show apiClientProvider;
+import '../../services/download_service_impl.dart';
 
 /// Admin-only Folder Details — reached by tapping a folder anywhere in
 /// the Folders flow (root list, or another folder's sub-folder list).
@@ -99,6 +104,11 @@ class _FolderDetailsScreenState extends ConsumerState<FolderDetailsScreen> {
         showBack: true,
         actions: [
           IconButton(
+            tooltip: 'Download Folder as ZIP',
+            onPressed: () => _downloadFolderZip(context, ref, folder),
+            icon: const Icon(Icons.archive_outlined),
+          ),
+          IconButton(
             tooltip: 'Share with Client',
             onPressed: () => showShareWithClientSheet(
               context,
@@ -142,10 +152,10 @@ class _FolderDetailsScreenState extends ConsumerState<FolderDetailsScreen> {
                       ),
                     ),
                     for (final ancestor in ancestors) ...[
-                      const Padding(
+                      Padding(
                         padding: EdgeInsets.symmetric(horizontal: 4),
                         child: Icon(Icons.chevron_right_rounded,
-                            size: 16, color: AppColors.subtitle),
+                            size: 16, color: context.textMuted),
                       ),
                       InkWell(
                         onTap: () => Navigator.of(context).pushNamed(
@@ -250,13 +260,13 @@ class _FolderDetailsScreenState extends ConsumerState<FolderDetailsScreen> {
             const SizedBox(height: AppSpacing.xl),
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
                     'Subfolders',
                     style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.text),
+                        color: context.textPrimary),
                   ),
                 ),
                 TextButton.icon(
@@ -300,13 +310,13 @@ class _FolderDetailsScreenState extends ConsumerState<FolderDetailsScreen> {
             const SizedBox(height: AppSpacing.xl),
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
                     'Media in this folder',
                     style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.text),
+                        color: context.textPrimary),
                   ),
                 ),
                 if (directMedia.isNotEmpty)
@@ -356,13 +366,13 @@ class _FolderDetailsScreenState extends ConsumerState<FolderDetailsScreen> {
             const SizedBox(height: AppSpacing.xl),
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
                     'Albums in this folder',
                     style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.text),
+                        color: context.textPrimary),
                   ),
                 ),
                 TextButton.icon(
@@ -384,7 +394,7 @@ class _FolderDetailsScreenState extends ConsumerState<FolderDetailsScreen> {
                 (a) => Padding(
                   padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                   child: Material(
-                    color: Colors.white,
+                    color: context.surfaceColor,
                     borderRadius: BorderRadius.circular(AppRadius.md),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(AppRadius.md),
@@ -396,7 +406,7 @@ class _FolderDetailsScreenState extends ConsumerState<FolderDetailsScreen> {
                         padding: const EdgeInsets.all(AppSpacing.md),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(AppRadius.md),
-                          border: Border.all(color: AppColors.border),
+                          border: Border.all(color: context.borderColor),
                         ),
                         child: Row(
                           children: [
@@ -413,13 +423,13 @@ class _FolderDetailsScreenState extends ConsumerState<FolderDetailsScreen> {
                                       fontWeight: FontWeight.w700)),
                             ),
                             Text('${a.photoCount} photos',
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontSize: 12,
-                                    color: AppColors.subtitle,
+                                    color: context.textMuted,
                                     fontWeight: FontWeight.w600)),
                             const SizedBox(width: 4),
-                            const Icon(Icons.chevron_right_rounded,
-                                size: 18, color: AppColors.subtitle),
+                            Icon(Icons.chevron_right_rounded,
+                                size: 18, color: context.textMuted),
                           ],
                         ),
                       ),
@@ -432,4 +442,38 @@ class _FolderDetailsScreenState extends ConsumerState<FolderDetailsScreen> {
       ),
     );
   }
+
+  Future<void> _downloadFolderZip(
+      BuildContext context, WidgetRef ref, FolderModel folder) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Preparing ZIP file, this may take a while...')),
+    );
+
+    try {
+      final apiClient = ref.read(apiClientProvider);
+      final bytes = await apiClient.getBytes('/folders/${folder.id}/zip');
+
+      const downloadService = DownloadServiceImpl();
+      final success = await downloadService.downloadBytes(
+        context: context,
+        bytes: Uint8List.fromList(bytes),
+        fileName: '${folder.name.replaceAll(' ', '_')}.zip',
+      );
+
+      if (success) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Folder ZIP download complete.')),
+        );
+      }
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Failed to download ZIP: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
 }
+

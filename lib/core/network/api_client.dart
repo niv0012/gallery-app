@@ -124,6 +124,26 @@ class ApiClient {
         ));
   }
 
+  Future<List<int>> getBytes(String path, {bool withAuth = true}) async {
+    final response = await _guardedRaw(() => _dio.get<List<int>>(
+          _url(path),
+          options: Options(
+            extra: {'withAuth': withAuth},
+            responseType: ResponseType.bytes,
+          ),
+        ));
+    return response.data as List<int>;
+  }
+
+  Future<void> downloadFile(String path, String savePath, {bool withAuth = true, void Function(int, int)? onReceiveProgress}) async {
+    await _guardedRaw(() => _dio.download(
+      _url(path),
+      savePath,
+      onReceiveProgress: onReceiveProgress,
+      options: Options(extra: {'withAuth': withAuth}),
+    ));
+  }
+
   Future<dynamic> post(String path,
       {Object? body, bool withAuth = true}) async {
     debugPrint('[ApiClient] POST ${_url(path)} | body: $body');
@@ -264,6 +284,25 @@ class ApiClient {
     } catch (e) {
       debugPrint('[ApiClient] ❌ NATIVE WEB UPLOAD FAILED: $e');
       throw ApiException(0, 'Upload failed: $e');
+    }
+  }
+
+  Future<Response> _guardedRaw(Future<Response> Function() send) async {
+    try {
+      final response = await send();
+      debugPrint(
+          '[ApiClient] ✅ HTTP ${response.statusCode} (Raw)');
+      if (response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300) {
+        return response;
+      }
+      return _handleResponse(response);
+    } on DioException catch (e) {
+      if (e.response != null) {
+        return _handleResponse(e.response!);
+      }
+      throw const ApiException(0, "Network error");
+    } catch (e) {
+      throw ApiException(0, e.toString());
     }
   }
 

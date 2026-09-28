@@ -26,6 +26,7 @@ import '../../services/media_file_cache.dart';
 import '../../providers/auth_providers.dart'
     show apiClientProvider;
 import '../../providers/settings_provider.dart';
+import '../../core/theme/theme_context.dart';
 
 const _gridFileCache = MediaFileCache();
 const _gridDownloadService = DownloadServiceImpl();
@@ -731,7 +732,7 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
                         color: (Theme.of(context).brightness == Brightness.dark ? AppColors.subtitleOnDark : AppColors.subtitle), fontSize: 12, height: 1.4),
                   ),
                   SizedBox(height: 12),
-                  const Divider(color: AppColors.border),
+                  Divider(color: context.borderColor),
                 ],
               ),
             ),
@@ -804,7 +805,7 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
                                       child: SizedBox(
                                         height: _viewMode == _ClientGalleryViewMode.details ? 300 : 150,
                                         child: _buildGridItem(
-                                            context, m, albumMedia, data.showWatermark, data.allowDownload),
+                                            context, m, albumMedia, data.showWatermark, data.allowDownload, data.studioLogoUrl),
                                       ),
                                     );
                                   },
@@ -828,7 +829,7 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
                                   (context, i) {
                                     final m = albumMedia[i];
                                     return _buildGridItem(context, m, albumMedia,
-                                        data.showWatermark, data.allowDownload);
+                                        data.showWatermark, data.allowDownload, data.studioLogoUrl);
                                   },
                                   childCount: albumMedia.length,
                                 ),
@@ -842,28 +843,29 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
           ? Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                FloatingActionButton.extended(
-                  heroTag: 'share_fab',
-                  onPressed: () async {
-                    final ids = _selectedIds.toList(growable: false);
-                    _clearSelection();
-                    if (ids.isEmpty) return;
+                if (data.allowDownload)
+                  FloatingActionButton.extended(
+                    heroTag: 'share_fab',
+                    onPressed: () async {
+                      final ids = _selectedIds.toList(growable: false);
+                      _clearSelection();
+                      if (ids.isEmpty) return;
 
-                    final itemsToShare = <MediaModel>[];
-                    for (final id in ids) {
-                      final m = albumMedia.firstWhere((x) => x.id == id,
-                          orElse: () => albumMedia.first);
-                      if (m.id == id && m.displayPath.trim().isNotEmpty) {
-                        itemsToShare.add(m);
+                      final itemsToShare = <MediaModel>[];
+                      for (final id in ids) {
+                        final m = albumMedia.firstWhere((x) => x.id == id,
+                            orElse: () => albumMedia.first);
+                        if (m.id == id && m.displayPath.trim().isNotEmpty) {
+                          itemsToShare.add(m);
+                        }
                       }
-                    }
-                    if (itemsToShare.isEmpty || !context.mounted) return;
-                    await _shareMultipleMedia(context, itemsToShare);
-                  },
-                  icon: Icon(Icons.share_rounded),
-                  label: Text('Share ${_selectedIds.length} items'),
-                  backgroundColor: AppColors.primary,
-                ),
+                      if (itemsToShare.isEmpty || !context.mounted) return;
+                      await _shareMultipleMedia(context, itemsToShare);
+                    },
+                    icon: Icon(Icons.share_rounded),
+                    label: Text('Share ${_selectedIds.length} items'),
+                    backgroundColor: AppColors.primary,
+                  ),
                 if (data.allowDownload) ...[
                   SizedBox(width: 16),
                   FloatingActionButton.extended(
@@ -1069,7 +1071,7 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
   }
 
   Widget _buildGridItem(BuildContext context, MediaModel m,
-      List<MediaModel> allMedia, bool showWatermark, bool allowDownload) {
+      List<MediaModel> allMedia, bool showWatermark, bool allowDownload, String? watermarkUrl) {
     final thumbPath = m.displayThumbnailPath;
     final isNetwork =
         thumbPath.startsWith('http://') || thumbPath.startsWith('https://');
@@ -1115,6 +1117,7 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
               showWatermark: showWatermark,
               allowDownload: allowDownload,
               shareLinkId: widget.token,
+              watermarkUrl: watermarkUrl,
               mediaItems: allMedia,
               readOnly: true,
             ),
@@ -1129,6 +1132,7 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
               showWatermark: showWatermark,
               allowDownload: allowDownload,
               shareLinkId: widget.token,
+              watermarkUrl: watermarkUrl,
               mediaItems: allMedia,
               readOnly: true,
             ),

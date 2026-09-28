@@ -4,6 +4,7 @@ import '../../core/api/admin_api_client.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
 import 'super_admin_user_detail_screen.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Cross-cutting view of "which studios currently pay a platform
 /// subscription" — pulled from the same GET /admin/users data as the
@@ -44,14 +45,14 @@ class _SuperAdminSubscriptionsScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.bgColor,
         elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.text),
-        title: const Text('Subscriptions',
+        iconTheme: IconThemeData(color: context.textPrimary),
+        title: Text('Subscriptions',
             style: TextStyle(
-                color: AppColors.text, fontWeight: FontWeight.w700, fontSize: 18)),
+                color: context.textPrimary, fontWeight: FontWeight.w700, fontSize: 18)),
       ),
       body: FutureBuilder<PlatformUsers>(
         future: _usersFuture,
@@ -68,7 +69,7 @@ class _SuperAdminSubscriptionsScreenState
                   children: [
                     Text('${snapshot.error}',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(color: AppColors.subtitle)),
+                        style: TextStyle(color: context.textMuted)),
                     const SizedBox(height: AppSpacing.md),
                     OutlinedButton(onPressed: _refresh, child: const Text('Retry')),
                   ],
@@ -100,7 +101,7 @@ class _SuperAdminSubscriptionsScreenState
                         label: 'All',
                         count: allStudios.length,
                         selected: _filter == null,
-                        color: AppColors.text,
+                        color: context.textPrimary,
                         onTap: () => setState(() {
                           _filter = null;
                         }),
@@ -124,11 +125,11 @@ class _SuperAdminSubscriptionsScreenState
                       ? ListView(
                           // Wrapped in a ListView (not a bare Center) so
                           // pull-to-refresh still works on an empty filter.
-                          children: const [
+                          children: [
                             SizedBox(height: 120),
                             Center(
                               child: Text('No studios in this filter',
-                                  style: TextStyle(color: AppColors.subtitle)),
+                                  style: TextStyle(color: context.textMuted)),
                             ),
                           ],
                         )
@@ -176,15 +177,15 @@ class _FilterChip extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: selected ? color.withValues(alpha: 0.12) : AppColors.surfaceElevated,
+            color: selected ? color.withValues(alpha: 0.12) : context.surfaceColor,
             borderRadius: BorderRadius.circular(AppRadius.pill),
-            border: Border.all(color: selected ? color : AppColors.border),
+            border: Border.all(color: selected ? color : context.borderColor),
           ),
           child: Text('$label · $count',
               style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w700,
-                  color: selected ? color : AppColors.subtitle)),
+                  color: selected ? color : context.textMuted)),
         ),
       ),
     );
@@ -201,9 +202,9 @@ class _SubscriptionTile extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: AppColors.surfaceElevated,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.borderColor),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(AppRadius.md),
@@ -237,7 +238,7 @@ class _SubscriptionTile extends StatelessWidget {
                               fontWeight: FontWeight.w600, fontSize: 13.5)),
                       Text(
                         _buildSubtitle(studio),
-                        style: const TextStyle(fontSize: 11.5, color: AppColors.subtitle),
+                        style: TextStyle(fontSize: 11.5, color: context.textMuted),
                       ),
                     ],
                   ),

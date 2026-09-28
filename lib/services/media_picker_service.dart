@@ -146,7 +146,7 @@ class MediaPickerService {
         allowMultiple: false,
         allowedExtensions: allowedExtensions,
       );
-      final f = resultList?.isNotEmpty == true ? resultList!.first : null;
+      final f = resultList.isNotEmpty == true ? resultList.first : null;
       result = f != null ? [f] : [];
     }
     if (result.isEmpty) return [];
@@ -158,7 +158,7 @@ class MediaPickerService {
       out.add(PickedMediaFile(
         bytes: bytes,
         fileName: f.name,
-        contentType: MediaContentType.forFileName(f.name),
+        contentType: MediaContentType.forBytesAndName(bytes, f.name),
       ));
     }
     return out;
@@ -179,8 +179,8 @@ class MediaPickerService {
       bytes: bytes,
       fileName: file.name,
       // `XFile.mimeType` is reliably populated on web; elsewhere it's
-      // often null, so fall back to extension sniffing.
-      contentType: file.mimeType ?? MediaContentType.forFileName(file.name),
+      // often null, so fall back to sniffing bytes then extension.
+      contentType: file.mimeType ?? MediaContentType.forBytesAndName(bytes, file.name),
     );
   }
 
@@ -228,12 +228,41 @@ class MediaContentType {
   /// — the backend's `POST /media/upload` rejects unsupported content
   /// types itself (see `media_upload_service.dart`), so this only needs
   /// to be a best-effort guess, not a strict validator.
-  static String forFileName(String fileName) {
+  /// Sniffs the MIME type from the first few bytes of the file, falling back
+  /// to filename extension, and then to `application/octet-stream`.
+  static String forBytesAndName(List<int> bytes, String fileName) {
+    if (bytes.length > 4) {
+      if (bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) {
+        return 'image/jpeg';
+      }
+      if (bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) {
+        return 'image/png';
+      }
+      if (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x38) {
+        return 'image/gif';
+      }
+      if (bytes[0] == 0x00 && bytes[1] == 0x00 && bytes[2] == 0x00 && 
+          bytes.length >= 12 && bytes[4] == 0x66 && bytes[5] == 0x74 && bytes[6] == 0x79 && bytes[7] == 0x70) {
+          // ftyp
+          final brand = String.fromCharCodes(bytes.sublist(8, 12));
+          if (brand == 'heic' || brand == 'heix' || brand == 'hevc' || brand == 'heim') {
+            return 'image/heic';
+          }
+          if (brand == 'mp41' || brand == 'mp42' || brand == 'isom') {
+            return 'video/mp4';
+          }
+      }
+    }
+
     final dot = fileName.lastIndexOf('.');
     if (dot < 0 || dot == fileName.length - 1) {
       return 'application/octet-stream';
     }
     final ext = fileName.substring(dot + 1).toLowerCase();
     return _byExtension[ext] ?? 'application/octet-stream';
+  }
+
+  static String forFileName(String fileName) {
+    return forBytesAndName([], fileName);
   }
 }

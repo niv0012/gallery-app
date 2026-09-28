@@ -28,8 +28,10 @@ import 'media_details_screen.dart';
 import '../../widgets/media/edited_image.dart';
 import '../../widgets/media/video_fallback_thumbnail.dart';
 import 'media_batch_workflows.dart';
+import '../../widgets/media/media_thumb_badges.dart';
 import '../../widgets/admin/fade_slide_in.dart';
 import '../../widgets/common/compact_anchored_dropdown.dart';
+import '../../core/theme/theme_context.dart';
 
 const _gridFileCache = MediaFileCache();
 const _gridShareService = ShareServiceImpl();
@@ -1209,6 +1211,27 @@ class _MediaGridScreenState extends ConsumerState<MediaGridScreen>
         actions: [
           if (c.isSelectionMode) ...[
             IconButton(
+              tooltip: 'Select Liked',
+              icon: Icon(Icons.favorite_rounded),
+              onPressed: () {
+                final likedIds = media.where((m) => m.likeCount > 0).map((m) => m.id).toList();
+                if (likedIds.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('No liked photos found in this view.')),
+                  );
+                  return;
+                }
+                for (final id in likedIds) {
+                  if (!c.selectedIds.contains(id)) {
+                    c.toggleSelected(id);
+                  }
+                }
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Selected ${likedIds.length} liked photos.')),
+                );
+              },
+            ),
+            IconButton(
               tooltip: c.selectedIds.length == media.length
                   ? 'Deselect All'
                   : 'Select All',
@@ -2310,6 +2333,13 @@ class _MediaTileState extends State<_MediaTile> {
               // Selection overlay animation
               Positioned.fill(child: selectionOverlay),
 
+              // Engagement badges (Likes and Comments)
+              MediaThumbBadges(
+                likeCount: m.likeCount,
+                commentCount: m.commentCount,
+                alignment: Alignment.bottomLeft,
+              ),
+
               // Bottom actions (keep callbacks intact)
               Positioned(
                 right: AppSpacing.sm,
@@ -2468,7 +2498,7 @@ class _TimelineHeaderDelegate extends SliverPersistentHeaderDelegate {
       BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
       height: 40,
-      color: AppColors.background.withValues(alpha: 0.95),
+      color: context.bgColor.withValues(alpha: 0.95),
       padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       alignment: Alignment.centerLeft,
       child: Row(

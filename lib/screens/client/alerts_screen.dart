@@ -6,6 +6,7 @@ import '../../core/theme/app_theme.dart';
 import '../../models/notification_alert.dart';
 import '../../providers/alerts_provider.dart';
 import '../../widgets/common/empty_tab_placeholder.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Alerts tab body — reads real alert data from [alertsProvider] and
 /// falls back to [EmptyTabPlaceholder] when there's nothing to show.
@@ -70,7 +71,7 @@ class _AlertTile extends StatelessWidget {
           padding: EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: context.borderColor),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,

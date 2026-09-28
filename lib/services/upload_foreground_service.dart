@@ -9,9 +9,8 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 /// persistent notification with the upload count and percentage, and tells the
 /// OS not to kill the app process while active.
 ///
-/// iOS: This class is a no-op. Uploads use the app's regular request flow;
-/// background URLSession uploads are not implemented, so iOS may suspend
-/// uploads after the app moves to the background.
+/// iOS: No foreground service is needed. iOS allows background URLSession
+/// uploads natively; this class is a no-op on iOS/web/desktop.
 class UploadForegroundService {
   UploadForegroundService._();
 
@@ -32,7 +31,7 @@ class UploadForegroundService {
         channelImportance: NotificationChannelImportance.LOW,
         priority: NotificationPriority.LOW,
       ),
-      // The plugin initialization below is guarded to Android above.
+      // iOS uses BGURLSession natively, so this is a no-op.
       iosNotificationOptions: const IOSNotificationOptions(),
       foregroundTaskOptions: ForegroundTaskOptions(
         // Do not run a separate Dart isolate — we only need the notification.

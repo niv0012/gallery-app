@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Shared "coming soon" body for bottom-nav tabs that don't have real
 /// content yet (Gallery, Alerts) — keeps every dummy tab visually
@@ -51,7 +52,7 @@ class EmptyTabPlaceholder extends StatelessWidget {
               style: Theme.of(context)
                   .textTheme
                   .bodyLarge
-                  ?.copyWith(color: AppColors.subtitle),
+                  ?.copyWith(color: context.textMuted),
             ),
           ],
         ),

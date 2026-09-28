@@ -334,6 +334,17 @@ def upload_studio_avatar(
     return AvatarUploadResponse(avatar_url=current_user.avatar_url)
 
 
+@router.delete("/me/avatar", response_model=MessageResponse)
+def delete_studio_avatar(
+    current_user: User = Depends(get_current_studio_user),
+    db: Session = Depends(get_db),
+) -> MessageResponse:
+    """Removes the studio's logo, reverting them to the default camera icon."""
+    if current_user.avatar_url:
+        current_user.avatar_url = None
+        db.commit()
+    return MessageResponse(message="Studio logo removed.")
+
 @router.post("/me/cover", response_model=AvatarUploadResponse)
 def upload_studio_cover(
     file: UploadFile = File(...),

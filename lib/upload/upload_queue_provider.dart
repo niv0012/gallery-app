@@ -869,8 +869,7 @@ class UploadQueueController extends AsyncNotifier<UploadQueueState> {
 
     if (updatedJobs
         .every((j) => j.isDone || j.status == UploadJobStatus.paused)) {
-      _ticker?.cancel();
-      _ticker = null;
+      _stopTickerAndService();
       state = AsyncValue.data(s.copyWith(
         jobs: updatedJobs,
         isProcessing: false,
@@ -913,8 +912,7 @@ class UploadQueueController extends AsyncNotifier<UploadQueueState> {
       );
     }).toList();
 
-    _ticker?.cancel();
-    _ticker = null;
+    _stopTickerAndService();
 
     state = AsyncValue.data(s.copyWith(
       jobs: updatedJobs,
@@ -963,8 +961,7 @@ class UploadQueueController extends AsyncNotifier<UploadQueueState> {
     await _saveQueue();
 
     if (updatedJobs.every((j) => j.isDone)) {
-      _ticker?.cancel();
-      _ticker = null;
+      _stopTickerAndService();
       state = AsyncValue.data(state.value!.copyWith(
         isProcessing: false,
         speedBytesPerSecond: 0.0,
@@ -988,8 +985,7 @@ class UploadQueueController extends AsyncNotifier<UploadQueueState> {
       );
     }).toList();
 
-    _ticker?.cancel();
-    _ticker = null;
+    _stopTickerAndService();
 
     state = AsyncValue.data(s.copyWith(
       jobs: updatedJobs,
@@ -998,6 +994,68 @@ class UploadQueueController extends AsyncNotifier<UploadQueueState> {
       remainingTime: null,
       message: 'Canceled all uploads',
     ));
+    await _saveQueue();
+  }
+
+  /// Stops the progress ticker AND the foreground-service notification.
+  /// The ticker only stops the service itself when it notices that nothing
+  /// is active; every path that cancels the ticker directly (pause / cancel
+  /// / remove) must stop the service too, or the "Uploading N files"
+  /// notification stays up with nothing running behind it.
+  void _stopTickerAndService() {
+    _ticker?.cancel();
+    _ticker = null;
+    unawaited(UploadForegroundService.stop());
+  }
+
+  /// Removes [jobId] from the queue list (swipe-to-delete).
+  ///
+  /// A job that is still queued / uploading / paused is canceled first (its
+  /// in-flight request is aborted through the cancel token), so nothing
+  /// keeps uploading in the background after its row is gone. A finished
+  /// job (completed / failed / canceled) is simply dropped from the list —
+  /// media that already reached the server is NOT deleted.
+  ///
+  /// The list is updated synchronously (before the first `await`) because a
+  /// `Dismissible` must leave the widget tree in the same frame it is
+  /// dismissed.
+  Future<void> removeJob(String jobId) async {
+    final s = state.value;
+    if (s == null) return;
+    final idx = s.jobs.indexWhere((j) => j.id == jobId);
+    if (idx == -1) return;
+    final job = s.jobs[idx];
+
+    if (!job.isDone) _uploadCancelTokens[jobId]?.cancel('Removed by user');
+    _lastProgressUpdate.remove(jobId);
+
+    final remaining = [...s.jobs]..removeAt(idx);
+    final stillActive = remaining.any((j) =>
+        j.status == UploadJobStatus.uploading ||
+        j.status == UploadJobStatus.queued);
+
+    state = AsyncValue.data(s.copyWith(
+      jobs: remaining,
+      isProcessing: s.isProcessing && stillActive,
+      speedBytesPerSecond: stillActive ? s.speedBytesPerSecond : 0.0,
+      clearRemainingTime: !stillActive,
+    ));
+    if (!stillActive) _stopTickerAndService();
+
+    await _saveQueue();
+  }
+
+  /// "Undo" for [removeJob]: puts a finished job back in its original
+  /// (creation-time) position. No-op for active jobs — a canceled network
+  /// request can't be resumed by re-inserting its row.
+  Future<void> restoreJob(UploadJobModel job) async {
+    final s = state.value;
+    if (s == null) return;
+    if (!job.isDone || s.jobs.any((j) => j.id == job.id)) return;
+
+    final jobs = [...s.jobs, job]
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    state = AsyncValue.data(s.copyWith(jobs: jobs));
     await _saveQueue();
   }
 

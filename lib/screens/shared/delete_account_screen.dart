@@ -13,6 +13,7 @@ import '../../widgets/common/app_popup.dart';
 import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/screen_backdrop.dart';
 import '../../widgets/inputs/custom_text_field.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Delete Account screen (Task 10): asks for the account password, a
 /// tick-box acknowledging the action is permanent, then a second
@@ -205,7 +206,7 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500,
-                                  color: AppColors.text.withValues(alpha: 0.85),
+                                  color: context.textPrimary.withValues(alpha: 0.85),
                                   height: 1.4,
                                 ),
                               ),

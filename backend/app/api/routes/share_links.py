@@ -14,7 +14,7 @@ from app.core.download_log import record_download_event
 from app.core.face_index import extract_query_faces, resolve_query_face, search_faces
 from app.core.security import hash_password, verify_password
 from app.db.session import get_db
-from app.models.gallery import Album, DownloadSource, Media, ShareLink, GalleryCollection
+from app.models.gallery import Album, DownloadSource, Media, ShareLink, GalleryCollection, GalleryViewEvent
 from app.models.user import User
 from app.schemas.face import DetectedFaceRead, FaceBoxRead, FaceMatchRead, FaceSearchResponse
 from app.schemas.gallery import (
@@ -314,6 +314,12 @@ def view_shared_gallery(
 
     link.views_count += 1
     link.last_viewed_at = datetime.now(timezone.utc)
+    db.add(GalleryViewEvent(
+        owner_id=link.owner_id,
+        share_link_id=link.id,
+        album_id=album.id if album else None,
+        viewer_id=user.id if user else None
+    ))
     db.commit()
     
     from app.schemas.gallery import PublicCollectionSummary
@@ -327,6 +333,9 @@ def view_shared_gallery(
     
         logger.info(f"[SHARE_LOOKUP_DEBUG] Public view gallery success for token='{token}' -> albumId='{album.id}', media count={len(media)}")
     
+        owner = db.get(User, link.owner_id)
+        studio_logo_url = owner.avatar_url if owner else None
+
         return PublicShareLinkRead(
             token=link.token,
             album=PublicAlbumSummary(
@@ -339,6 +348,7 @@ def view_shared_gallery(
             allow_download=link.allow_download,
             show_watermark=link.show_watermark,
             requires_password=link.password_hash is not None,
+            studio_logo_url=studio_logo_url,
         )
     else:
         # Collection sharing
@@ -360,6 +370,9 @@ def view_shared_gallery(
             for a in rows
         ]
         
+        owner = db.get(User, link.owner_id)
+        studio_logo_url = owner.avatar_url if owner else None
+
         return PublicShareLinkRead(
             token=link.token,
             collection=PublicCollectionSummary(
@@ -370,6 +383,7 @@ def view_shared_gallery(
             allow_download=link.allow_download,
             show_watermark=link.show_watermark,
             requires_password=link.password_hash is not None,
+            studio_logo_url=studio_logo_url,
         )
 
 
@@ -525,7 +539,16 @@ def view_shared_collection_album(
 
     link.views_count += 1
     link.last_viewed_at = datetime.now(timezone.utc)
+    db.add(GalleryViewEvent(
+        owner_id=link.owner_id,
+        share_link_id=link.id,
+        album_id=album.id if album else None,
+        viewer_id=user.id if user else None
+    ))
     db.commit()
+
+    owner = db.get(User, link.owner_id)
+    studio_logo_url = owner.avatar_url if owner else None
 
     return PublicShareLinkRead(
         token=link.token,
@@ -539,6 +562,7 @@ def view_shared_collection_album(
         allow_download=link.allow_download,
         show_watermark=link.show_watermark,
         requires_password=link.password_hash is not None,
+        studio_logo_url=studio_logo_url,
     )
 
 

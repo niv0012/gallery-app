@@ -10,6 +10,7 @@ import '../../providers/auth_providers.dart';
 import '../../providers/drawer_provider.dart';
 import '../../widgets/cards/glass_card.dart';
 import '../../widgets/common/custom_app_bar.dart';
+import '../../core/theme/theme_context.dart';
 
 class SubscriptionPlansScreen extends ConsumerStatefulWidget {
   const SubscriptionPlansScreen({super.key});
@@ -417,7 +418,7 @@ class _SubscriptionPlansScreenState
                                 WidgetStateProperty.resolveWith<Color?>(
                                     (states) {
                               if (states.contains(WidgetState.disabled)) {
-                                return AppColors.border.withValues(alpha: 0.5);
+                                return context.borderColor.withValues(alpha: 0.5);
                               }
                               return AppColors.primary;
                             }),
@@ -450,7 +451,7 @@ class _SubscriptionPlansScreenState
                                   fontWeight: FontWeight.w800,
                                   color: (isSelectedActive ||
                                           isSelectedTrialLocked)
-                                      ? AppColors.subtitle
+                                      ? context.textMuted
                                       : Colors.white,
                                 ),
                               ),
@@ -778,12 +779,12 @@ class _PlanCard extends StatelessWidget {
                                 borderRadius:
                                     BorderRadius.circular(AppRadius.sm),
                               ),
-                              child: const Text(
+                              child: Text(
                                 'ALREADY USED',
                                 style: TextStyle(
                                   fontSize: 9,
                                   fontWeight: FontWeight.w900,
-                                  color: AppColors.subtitle,
+                                  color: context.textMuted,
                                   letterSpacing: 0.5,
                                 ),
                               ),
@@ -855,7 +856,7 @@ class _PlanCard extends StatelessWidget {
                           horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
                         color: (plan.planType == SubscriptionPlan.trial
-                                ? AppColors.subtitle
+                                ? context.textMuted
                                 : isYearly
                                     ? AppColors.gold
                                     : AppColors.primary)
@@ -869,7 +870,7 @@ class _PlanCard extends StatelessWidget {
                             Icons.cloud_done_rounded,
                             size: 14,
                             color: plan.planType == SubscriptionPlan.trial
-                                ? AppColors.subtitle
+                                ? context.textMuted
                                 : isYearly
                                     ? AppColors.gold
                                     : AppColors.primary,
@@ -881,7 +882,7 @@ class _PlanCard extends StatelessWidget {
                               fontSize: 11,
                               fontWeight: FontWeight.w800,
                               color: plan.planType == SubscriptionPlan.trial
-                                  ? AppColors.subtitle
+                                  ? context.textMuted
                                   : isYearly
                                       ? AppColors.gold
                                       : AppColors.primary,
@@ -986,7 +987,7 @@ class _CurrentPlanStatusCard extends StatelessWidget {
         color: isBasic ? Colors.grey.shade50 : AppColors.darkSurface,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(
-          color: isBasic ? AppColors.border : AppColors.darkBorder,
+          color: isBasic ? context.borderColor : AppColors.darkBorder,
         ),
       ),
       child: Column(
@@ -996,7 +997,7 @@ class _CurrentPlanStatusCard extends StatelessWidget {
             children: [
               Icon(
                 isBasic ? Icons.info_outline_rounded : Icons.verified_rounded,
-                color: isBasic ? AppColors.subtitle : AppColors.gold,
+                color: isBasic ? context.textMuted : AppColors.gold,
                 size: 22,
               ),
               const SizedBox(width: 8),
@@ -1005,7 +1006,7 @@ class _CurrentPlanStatusCard extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w900,
-                  color: isBasic ? AppColors.text : AppColors.textOnDark,
+                  color: isBasic ? context.textPrimary : AppColors.textOnDark,
                 ),
               ),
             ],
@@ -1017,7 +1018,7 @@ class _CurrentPlanStatusCard extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
-                color: AppColors.text.withValues(alpha: 0.85),
+                color: context.textPrimary.withValues(alpha: 0.85),
               ),
             ),
             const SizedBox(height: AppSpacing.md),
@@ -1155,7 +1156,7 @@ class _ConfirmationBottomSheet extends StatelessWidget {
                 width: 36,
                 height: 4.5,
                 decoration: BoxDecoration(
-                  color: AppColors.border,
+                  color: context.borderColor,
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
@@ -1187,12 +1188,12 @@ class _ConfirmationBottomSheet extends StatelessWidget {
                   ),
             ),
             const SizedBox(height: AppSpacing.xs),
-            const Text(
+            Text(
               "You'll be redirected to picgallery.in to complete your subscription.",
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 12,
-                color: AppColors.subtitle,
+                color: context.textMuted,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -1202,9 +1203,9 @@ class _ConfirmationBottomSheet extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(AppSpacing.md),
               decoration: BoxDecoration(
-                color: AppColors.background,
+                color: context.bgColor,
                 borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: context.borderColor),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1214,11 +1215,11 @@ class _ConfirmationBottomSheet extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text(
+                        Text(
                           'Total Billing',
                           style: TextStyle(
                             fontSize: 12,
-                            color: AppColors.subtitle,
+                            color: context.textMuted,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -1226,10 +1227,10 @@ class _ConfirmationBottomSheet extends StatelessWidget {
                           plan.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
-                            color: AppColors.text,
+                            color: context.textPrimary,
                           ),
                         ),
                       ],
@@ -1238,10 +1239,10 @@ class _ConfirmationBottomSheet extends StatelessWidget {
                   const SizedBox(width: 8),
                   Text(
                     '${plan.currency}${plan.price.toStringAsFixed(0)}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w900,
-                      color: AppColors.text,
+                      color: context.textPrimary,
                     ),
                   ),
                 ],
@@ -1250,12 +1251,12 @@ class _ConfirmationBottomSheet extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
 
             // Benefit points list
-            const Text(
+            Text(
               'Main Benefits Included:',
               style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w800,
-                color: AppColors.text,
+                color: context.textPrimary,
               ),
             ),
             const SizedBox(height: AppSpacing.xs),
@@ -1268,9 +1269,9 @@ class _ConfirmationBottomSheet extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(
                         f,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 13,
-                            color: AppColors.text,
+                            color: context.textPrimary,
                             fontWeight: FontWeight.w600),
                       ),
                     ],
@@ -1285,9 +1286,9 @@ class _ConfirmationBottomSheet extends StatelessWidget {
                   const SizedBox(width: 8),
                   Text(
                     plan.backupDuration,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 13,
-                        color: AppColors.text,
+                        color: context.textPrimary,
                         fontWeight: FontWeight.w600),
                   ),
                 ],
@@ -1306,8 +1307,8 @@ class _ConfirmationBottomSheet extends StatelessWidget {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md)),
                       side:
-                          const BorderSide(color: AppColors.border, width: 1.5),
-                      foregroundColor: AppColors.text,
+                          BorderSide(color: context.borderColor, width: 1.5),
+                      foregroundColor: context.textPrimary,
                     ),
                     child: const Text('Cancel',
                         style: TextStyle(fontWeight: FontWeight.w800)),

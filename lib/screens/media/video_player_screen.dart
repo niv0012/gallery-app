@@ -35,6 +35,7 @@ class VideoPlayerArgs {
   final bool showWatermark;
   final bool allowDownload;
   final String? shareLinkId;
+  final String? watermarkUrl;
 
   /// Pre-fetched media to display instead of resolving ids against
   /// `mediaProvider` — see [ImageViewerArgs.mediaItems] for why this is
@@ -53,6 +54,7 @@ class VideoPlayerArgs {
     this.showWatermark = false,
     this.allowDownload = true,
     this.shareLinkId,
+    this.watermarkUrl,
     this.mediaItems,
     this.readOnly = false,
   });
@@ -66,6 +68,7 @@ class VideoPlayerScreen extends ConsumerStatefulWidget {
   final bool showWatermark;
   final bool allowDownload;
   final String? shareLinkId;
+  final String? watermarkUrl;
   final List<MediaModel>? mediaItems;
   final bool readOnly;
 
@@ -77,6 +80,7 @@ class VideoPlayerScreen extends ConsumerStatefulWidget {
     this.showWatermark = false,
     this.allowDownload = true,
     this.shareLinkId,
+    this.watermarkUrl,
     this.mediaItems,
     this.readOnly = false,
   });
@@ -613,32 +617,18 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                               onControllerInitialized: _onControllerChanged,
                             ),
                           ),
-                          if (widget.showWatermark)
-                            Positioned.fill(
+                          if (widget.showWatermark && widget.watermarkUrl != null && widget.watermarkUrl!.isNotEmpty)
+                            Positioned(
+                              right: 16,
+                              bottom: 16,
                               child: IgnorePointer(
-                                child: Center(
-                                  child: RotationTransition(
-                                    turns:
-                                        const AlwaysStoppedAnimation(-25 / 360),
-                                    child: Container(
-                                      padding: EdgeInsets.symmetric(
-                                          horizontal: 16, vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black12
-                                            .withValues(alpha: 0.2),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        AppStrings.appName,
-                                        style: TextStyle(
-                                          color: Colors.white
-                                              .withValues(alpha: 0.2),
-                                          fontSize: 28,
-                                          fontWeight: FontWeight.w900,
-                                          letterSpacing: 2.5,
-                                        ),
-                                      ),
-                                    ),
+                                child: Opacity(
+                                  opacity: 0.7,
+                                  child: Image.network(
+                                    widget.watermarkUrl!,
+                                    height: 48,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
                                   ),
                                 ),
                               ),
@@ -834,11 +824,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen> {
                               runSpacing: AppSpacing.sm,
                               alignment: WrapAlignment.center,
                               children: [
-                                _ActionChip(
-                                  icon: Icons.ios_share_rounded,
-                                  label: 'Share',
-                                  onTap: shareCurrent,
-                                ),
+                                if (widget.allowDownload)
+                                  _ActionChip(
+                                    icon: Icons.ios_share_rounded,
+                                    label: 'Share',
+                                    onTap: shareCurrent,
+                                  ),
                                 if (widget.allowDownload)
                                   _ActionChip(
                                     icon: Icons.download_rounded,

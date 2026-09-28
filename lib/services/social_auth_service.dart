@@ -8,12 +8,7 @@ import 'package:google_sign_in/google_sign_in.dart' as gsign;
 import 'package:firebase_auth/firebase_auth.dart' as fauth;
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
-// Conditional import: dart:html sessionStorage on web, no-op stub on mobile.
-import 'web_storage_stub.dart'
-    if (dart.library.html) 'web_storage_web.dart';
 
-/// Key used to persist the selected role across the Google web redirect.
-const String _kPendingWebRole = '_pg_pending_google_role';
 
 /// Result returned by SocialAuthService.signInWithGoogle / signInWithApple
 /// — callers expect `.provider`, `.idToken` and `.fullName`.

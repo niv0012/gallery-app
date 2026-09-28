@@ -8,6 +8,7 @@ import '../../providers/auth_providers.dart';
 import '../../providers/studio_client_connections_provider.dart';
 import '../../providers/studio_shares_provider.dart';
 import '../common/empty_state_card.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Opens the "Share with client" picker for either a single [albumId]
 /// or every album directly inside [folderId] (exactly one of the two
@@ -110,10 +111,10 @@ class _ClientPickerSheet extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
               child: Text(
                 'Share "$itemLabel" with…',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
-                  color: AppColors.text,
+                  color: context.textPrimary,
                 ),
               ),
             ),
@@ -155,8 +156,8 @@ class _ClientPickerSheet extends StatelessWidget {
                       ),
                       title: Text(name,
                           style: const TextStyle(fontWeight: FontWeight.w700)),
-                      trailing: const Icon(Icons.chevron_right_rounded,
-                          color: AppColors.subtitle),
+                      trailing: Icon(Icons.chevron_right_rounded,
+                          color: context.textMuted),
                       onTap: () => Navigator.of(context).pop(connection),
                     );
                   },

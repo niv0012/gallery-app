@@ -17,6 +17,7 @@ import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/screen_backdrop.dart';
 import '../../widgets/inputs/custom_text_field.dart';
 import '../../services/social_auth_service.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Three-step registration: (1) identity, (2) password, (3) role-specific
 /// details + terms. Photographers see Studio fields on step 3; Clients
@@ -332,13 +333,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           const SizedBox(height: AppSpacing.xl),
           Row(
             children: [
-              const Expanded(child: Divider(color: AppColors.border)),
+              Expanded(child: Divider(color: context.borderColor)),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Text('or create account with',
                     style: Theme.of(context).textTheme.bodyMedium),
               ),
-              const Expanded(child: Divider(color: AppColors.border)),
+              Expanded(child: Divider(color: context.borderColor)),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
@@ -545,7 +546,7 @@ class _StepProgress extends StatelessWidget {
             margin: EdgeInsets.only(right: i == total - 1 ? 0 : 8),
             height: 6,
             decoration: BoxDecoration(
-              color: active ? AppColors.primary : AppColors.border,
+              color: active ? AppColors.primary : context.borderColor,
               borderRadius: BorderRadius.circular(8),
             ),
           ),

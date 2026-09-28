@@ -11,11 +11,8 @@ import '../../models/user.dart';
 import '../../providers/auth_providers.dart';
 import '../../providers/settings_provider.dart';
 import '../../services/deep_link_service.dart';
-import '../../services/social_auth_service.dart';
 import '../../storage/onboarding_local_store.dart';
-import '../../widgets/common/app_popup.dart';
 import '../../widgets/common/screen_backdrop.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 
 /// Animated splash: logo scales/fades in over the gradient backdrop, the
 /// tagline fades in after, then a soft loading dash before auto-navigating

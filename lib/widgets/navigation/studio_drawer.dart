@@ -43,16 +43,29 @@ class StudioDrawer extends ConsumerWidget {
     String? routeName,
   }) {
     ref.read(selectedDrawerItemProvider.notifier).select(id);
-    Navigator.of(context).pop(); // close the drawer first
+    final nav = Navigator.of(context);
+    nav.pop(); // close the drawer first
 
     switch (action) {
       case _DrawerAction.tab:
         onNavigateToTab?.call(tabIndex!);
         break;
       case _DrawerAction.route:
-        Navigator.of(context).pushNamed(routeName!);
+        _openRoute(nav, routeName!);
         break;
     }
+  }
+
+  /// Opens [routeName] without ever stacking a second copy of a page that is
+  /// already open: no-op if it is on top, unwinds to it if it is deeper in
+  /// the stack, otherwise pushes it.
+  static void _openRoute(NavigatorState nav, String routeName) {
+    if (routeObserver.currentRouteName == routeName) return;
+    if (routeObserver.isInStack(routeName)) {
+      nav.popUntil((r) => r.settings.name == routeName);
+      return;
+    }
+    nav.pushNamed(routeName);
   }
 
   Future<void> _confirmLogout(BuildContext context) async {
@@ -204,14 +217,6 @@ class StudioDrawer extends ConsumerWidget {
                 ),
                 _buildSectionHeader(context, 'CONTENT'),
                 _StudioDrawerTile(
-                  icon: Icons.collections_rounded,
-                  label: 'Albums',
-                  selected: selectedId == 'albums',
-                  onTap: () => _handleTap(
-                      context, ref, 'albums', _DrawerAction.tab,
-                      tabIndex: 1),
-                ),
-                _StudioDrawerTile(
                   icon: Icons.folder_rounded,
                   label: 'Folders',
                   selected: selectedId == 'folders',
@@ -243,13 +248,13 @@ class StudioDrawer extends ConsumerWidget {
                     ref
                         .read(selectedDrawerItemProvider.notifier)
                         .select('face_search');
-                    Navigator.of(context).pop();
+                    final nav = Navigator.of(context);
+                    nav.pop();
                     // Scopes the search to the studio's own library —
                     // same POST /faces/search endpoint, mirrors the
                     // AppBar action on AlbumsListScreen.
                     ref.read(faceSearchProvider.notifier).useMyLibrary();
-                    Navigator.of(context)
-                        .pushNamed(AppRoutes.faceSearchLanding);
+                    _openRoute(nav, AppRoutes.faceSearchLanding);
                   },
                 ),
                 _buildSectionHeader(context, 'RELATIONSHIPS'),

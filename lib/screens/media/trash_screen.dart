@@ -1,7 +1,3 @@
-import 'dart:io';
-
-import 'package:flutter/foundation.dart' show kIsWeb;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,14 +7,26 @@ import '../../core/utils/media_format_utils.dart';
 import '../../models/media_model.dart';
 import '../../providers/trash_provider.dart';
 import '../../widgets/common/custom_app_bar.dart';
+import '../../widgets/common/grid_columns_button.dart';
+import '../../widgets/media/media_thumb.dart';
 import '../../widgets/common/delete_confirmation_dialog.dart';
 import '../../widgets/common/snackbar_helper.dart';
+import '../../core/theme/theme_context.dart';
 
-class TrashScreen extends ConsumerWidget {
+class TrashScreen extends ConsumerStatefulWidget {
   const TrashScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TrashScreen> createState() => _TrashScreenState();
+}
+
+class _TrashScreenState extends ConsumerState<TrashScreen> {
+  /// null = pick automatically from the screen width; otherwise the
+  /// column count chosen in the app-bar (1 = list).
+  int? _columns;
+
+  @override
+  Widget build(BuildContext context) {
     final deletedMedia = ref.watch(trashProvider);
 
     return Scaffold(
@@ -26,6 +34,11 @@ class TrashScreen extends ConsumerWidget {
         title: 'Trash',
         showBack: true,
         actions: [
+          if (deletedMedia.isNotEmpty)
+            GridColumnsButton(
+              columns: _columns ?? _calculateCrossAxisCount(MediaQuery.sizeOf(context).width),
+              onChanged: (c) => setState(() => _columns = c),
+            ),
           if (deletedMedia.isNotEmpty)
             TextButton(
               onPressed: () => _confirmEmptyTrash(context, ref),
@@ -44,7 +57,7 @@ class TrashScreen extends ConsumerWidget {
           : LayoutBuilder(
               builder: (context, constraints) {
                 final crossAxisCount =
-                    _calculateCrossAxisCount(constraints.maxWidth);
+                    _columns ?? _calculateCrossAxisCount(constraints.maxWidth);
                 return GridView.builder(
                   padding: EdgeInsets.all(AppSpacing.md),
                   physics: const BouncingScrollPhysics(),
@@ -52,12 +65,13 @@ class TrashScreen extends ConsumerWidget {
                     crossAxisCount: crossAxisCount,
                     crossAxisSpacing: AppSpacing.md,
                     mainAxisSpacing: AppSpacing.md,
-                    childAspectRatio: 0.8,
+                    childAspectRatio: crossAxisCount == 1 ? 1.5 : 0.8,
                   ),
                   itemCount: deletedMedia.length,
                   itemBuilder: (context, index) {
                     final media = deletedMedia[index];
-                    return _TrashItemCard(media: media);
+                    return _TrashItemCard(
+                        media: media, compact: crossAxisCount >= 4);
                   },
                 );
               },
@@ -136,7 +150,11 @@ class TrashScreen extends ConsumerWidget {
 class _TrashItemCard extends ConsumerWidget {
   final MediaModel media;
 
-  const _TrashItemCard({required this.media});
+  /// Dense grids (4+ columns) show an icon-only Restore button so the
+  /// action row doesn't overflow the narrow tile.
+  final bool compact;
+
+  const _TrashItemCard({required this.media, this.compact = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -148,7 +166,7 @@ class _TrashItemCard extends ConsumerWidget {
             ? AppColors.darkSurfaceRaised
             : AppColors.surfaceElevated),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.borderColor),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -190,43 +208,67 @@ class _TrashItemCard extends ConsumerWidget {
                 ),
                 Positioned(
                   bottom: 8,
-                  left: 8,
-                  right: 8,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: () =>
-                            ref.read(trashProvider.notifier).restore(media.id),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: AppColors.primary,
-                          padding: EdgeInsets.symmetric(horizontal: 10),
-                          minimumSize: const Size(60, 28),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
-                          elevation: 0,
+                  left: 4,
+                  right: 4,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        if (compact)
+                          IconButton(
+                            tooltip: 'Restore',
+                            onPressed: () =>
+                                ref.read(trashProvider.notifier).restore(media.id),
+                            style: IconButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: AppColors.primary,
+                              minimumSize: const Size(24, 24),
+                              padding: const EdgeInsets.all(4),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(6)),
+                            ),
+                            icon: Icon(Icons.settings_backup_restore_rounded,
+                                size: 14),
+                          )
+                        else
+                        ElevatedButton.icon(
+                          onPressed: () =>
+                              ref.read(trashProvider.notifier).restore(media.id),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: AppColors.primary,
+                            padding: EdgeInsets.symmetric(horizontal: 10),
+                            minimumSize: const Size(60, 28),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
+                            elevation: 0,
+                          ),
+                          icon: Icon(Icons.settings_backup_restore_rounded,
+                              size: 12),
+                          label: Text('Restore',
+                              style: TextStyle(
+                                  fontSize: 10.5, fontWeight: FontWeight.bold)),
                         ),
-                        icon: Icon(Icons.settings_backup_restore_rounded,
-                            size: 12),
-                        label: Text('Restore',
-                            style: TextStyle(
-                                fontSize: 10.5, fontWeight: FontWeight.bold)),
-                      ),
-                      IconButton(
-                        onPressed: () =>
-                            _confirmDeletePermanently(context, ref),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.red.withValues(alpha: 0.2),
-                          foregroundColor: Colors.redAccent,
-                          minimumSize: const Size(28, 28),
-                          padding: EdgeInsets.zero,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
+                        SizedBox(width: compact ? 4 : 8),
+                        IconButton(
+                          onPressed: () =>
+                              _confirmDeletePermanently(context, ref),
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.red.withValues(alpha: 0.2),
+                            foregroundColor: Colors.redAccent,
+                            minimumSize: const Size(24, 24),
+                            padding: const EdgeInsets.all(4),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6)),
+                          ),
+                          icon: Icon(Icons.delete_forever_rounded, size: 14),
                         ),
-                        icon: Icon(Icons.delete_forever_rounded, size: 16),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -266,43 +308,10 @@ class _TrashItemCard extends ConsumerWidget {
     );
   }
 
-  Widget _buildThumbnail() {
-    final file = media.filePath.isEmpty ? null : File(media.filePath);
-    final hasRealFile = !kIsWeb && file != null && file.existsSync();
-
-    if (hasRealFile) {
-      if (media.type == MediaType.photo) {
-        return Image.file(file, fit: BoxFit.cover);
-      } else {
-        final thumbFile = File(media.thumbnailPath);
-        if (!kIsWeb && media.thumbnailPath.isNotEmpty && thumbFile.existsSync()) {
-          return Image.file(thumbFile, fit: BoxFit.cover);
-        }
-      }
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Color(media.gradientArgb.first),
-            Color(media.gradientArgb[1])
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Center(
-        child: Icon(
-          media.type == MediaType.photo
-              ? Icons.image_rounded
-              : Icons.play_circle_fill_rounded,
-          color: Colors.white60,
-          size: 36,
-        ),
-      ),
-    );
-  }
+  /// Shared thumbnail widget: handles local files, backend `file_url` /
+  /// `thumbnail_url`, videos and the gradient placeholder. The old
+  /// `Image.file`-only code showed nothing for API-sourced media.
+  Widget _buildThumbnail() => MediaThumb(media: media);
 
   void _confirmDeletePermanently(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDeleteConfirmationDialog(

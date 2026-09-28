@@ -11,6 +11,7 @@ import '../../widgets/buttons/gradient_button.dart';
 import '../../widgets/common/app_toast.dart';
 import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/screen_backdrop.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Confirms a password-reset email was sent: a scale-in envelope badge,
 /// "check your inbox" copy naming the destination email, a cooldown-style
@@ -126,7 +127,7 @@ class _CheckEmailScreenState extends ConsumerState<CheckEmailScreen>
                   style: Theme.of(context)
                       .textTheme
                       .bodyLarge
-                      ?.copyWith(color: AppColors.subtitle),
+                      ?.copyWith(color: context.textMuted),
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 GradientButton(label: 'Open Mail App', onPressed: _openMailApp),

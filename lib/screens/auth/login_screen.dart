@@ -21,6 +21,7 @@ import '../../widgets/inputs/custom_text_field.dart';
 import '../super_admin/super_admin_dashboard_screen.dart';
 import '../../core/api/admin_api_client.dart';
 import 'role_selection_screen.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Floating login layout (no big white card) — logo + heading up top,
 /// fields and gradient Sign In button floating over the blurred backdrop,
@@ -612,7 +613,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                       style: Theme.of(context)
                           .textTheme
                           .bodyLarge
-                          ?.copyWith(color: AppColors.subtitle),
+                          ?.copyWith(color: context.textMuted),
                     ),
                     const SizedBox(height: AppSpacing.xl),
                     if (_errorMessage != null) ...[
@@ -669,10 +670,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                               ),
                             ),
                             const SizedBox(width: 8),
-                            const Text('Remember me',
+                            Text('Remember me',
                                 style: TextStyle(
                                     fontSize: 13,
-                                    color: AppColors.subtitle,
+                                    color: context.textMuted,
                                     fontWeight: FontWeight.w500)),
                           ],
                         ),
@@ -697,13 +698,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     const SizedBox(height: AppSpacing.xl),
                     Row(
                       children: [
-                        const Expanded(child: Divider(color: AppColors.border)),
+                        Expanded(child: Divider(color: context.borderColor)),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
                           child: Text('or continue with',
                               style: Theme.of(context).textTheme.bodyMedium),
                         ),
-                        const Expanded(child: Divider(color: AppColors.border)),
+                        Expanded(child: Divider(color: context.borderColor)),
                       ],
                     ),
                     const SizedBox(height: AppSpacing.md),
@@ -740,10 +741,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                               arguments: widget.role);
                         },
                         child: RichText(
-                          text: const TextSpan(
+                          text: TextSpan(
                             text: "Don't have an account? ",
                             style: TextStyle(
-                                color: AppColors.subtitle,
+                                color: context.textMuted,
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.w500),
                             children: [

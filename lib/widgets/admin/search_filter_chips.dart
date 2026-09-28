@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/search_data.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Shared horizontal filter-chip row for Global Search — originally a
 /// private widget inside [GlobalSearchScreen], pulled out here so the new
@@ -37,17 +38,17 @@ class SearchFilterChips extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 gradient: isSelected ? AppColors.buttonGradient : null,
-                color: isSelected ? null : Colors.white,
+                color: isSelected ? null : context.surfaceColor,
                 borderRadius: BorderRadius.circular(AppRadius.pill),
                 border: Border.all(
-                    color: isSelected ? Colors.transparent : AppColors.border),
+                    color: isSelected ? Colors.transparent : context.borderColor),
               ),
               child: Text(
                 label,
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
-                  color: isSelected ? Colors.white : AppColors.subtitle,
+                  color: isSelected ? Colors.white : context.textMuted,
                 ),
               ),
             ),

@@ -28,6 +28,7 @@ import '../../screens/client/shared_album_preview_screen.dart';
 import '../../screens/client/shared_studios_screen.dart' show SharedStudioCard;
 import '../../providers/client_gallery_provider.dart';
 import '../../screens/client/scan_qr_screen.dart';
+import '../../core/theme/theme_context.dart';
 
 // ─── Section Header ─────────────────────────────────────────────────────
 
@@ -58,8 +59,8 @@ class SectionHeader extends StatelessWidget {
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppColors.text,
+              style: TextStyle(
+                color: context.textPrimary,
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.1,
@@ -115,7 +116,7 @@ class _HomeViewModeToggle extends ConsumerWidget {
           child: Icon(
             isGrid ? Icons.view_carousel_outlined : Icons.grid_view_rounded,
             size: 18,
-            color: AppColors.subtitle,
+            color: context.textMuted,
           ),
         ),
       ),
@@ -147,9 +148,9 @@ class SectionLoadingSkeleton extends StatelessWidget {
         itemBuilder: (_, __) => Container(
           width: width,
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.surfaceColor,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: context.borderColor),
           ),
           child: const Center(
             child: SizedBox(
@@ -199,7 +200,7 @@ class ErrorStateCard extends StatelessWidget {
             ? AppColors.darkSurface
             : Colors.white,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.borderColor),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -210,10 +211,10 @@ class ErrorStateCard extends StatelessWidget {
           Text(
             message,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: AppColors.subtitle,
+              color: context.textMuted,
             ),
           ),
           if (onRetry != null) ...[
@@ -588,7 +589,7 @@ class ConnectedStudioCard extends StatelessWidget {
             ? AppColors.darkSurface
             : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.borderColor),
         boxShadow: AppShadows.subtle,
       ),
       clipBehavior: Clip.antiAlias,
@@ -675,8 +676,8 @@ class ConnectedStudioCard extends StatelessWidget {
                   studio.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.text,
+                  style: TextStyle(
+                    color: context.textPrimary,
                     fontSize: 13.5,
                     fontWeight: FontWeight.w800,
                   ),
@@ -686,8 +687,8 @@ class ConnectedStudioCard extends StatelessWidget {
                   studio.location.isNotEmpty ? studio.location : 'Studio',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.subtitle,
+                  style: TextStyle(
+                    color: context.textMuted,
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                   ),
@@ -871,14 +872,14 @@ class ActivityList extends StatelessWidget {
             ? AppColors.darkSurface
             : Colors.white,
         borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.borderColor),
       ),
       child: ListView.separated(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         itemCount: alerts.length,
         separatorBuilder: (_, __) =>
-            const Divider(height: 1, thickness: 1, color: AppColors.border),
+            Divider(height: 1, thickness: 1, color: context.borderColor),
         itemBuilder: (_, index) => ActivityTile(alert: alerts[index]),
       ),
     );
@@ -901,14 +902,14 @@ class DownloadsList extends StatelessWidget {
             ? AppColors.darkSurface
             : Colors.white,
         borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.borderColor),
       ),
       child: ListView.separated(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         itemCount: downloads.length,
         separatorBuilder: (_, __) =>
-            const Divider(height: 1, thickness: 1, color: AppColors.border),
+            Divider(height: 1, thickness: 1, color: context.borderColor),
         itemBuilder: (_, index) => _DownloadTile(download: downloads[index]),
       ),
     );
@@ -1008,16 +1009,16 @@ class CollectionsChips extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(AppRadius.pill),
-                  border: Border.all(color: AppColors.border),
+                  border: Border.all(color: context.borderColor),
                 ),
                 child: Text(
                   c.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.text,
+                    color: context.textPrimary,
                   ),
                 ),
               ),
@@ -1122,8 +1123,8 @@ class QuickActionRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: AppColors.subtitle,
+                      style: TextStyle(
+                        color: context.textMuted,
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                       ),
@@ -1205,9 +1206,12 @@ class _ConnectedStudiosSectionState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
+        Padding(
           padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
-          child: SectionHeader(title: 'Connected Studios'),
+          child: SectionHeader(
+              title: connectedStudios.isNotEmpty
+                  ? 'Connected Studios (${connectedStudios.length})'
+                  : 'Connected Studios'),
         ),
         if (studiosState.isLoadingDirectory &&
             connectedConnections.isNotEmpty &&
@@ -1227,7 +1231,7 @@ class _ConnectedStudiosSectionState
                     ? AppColors.darkSurface
                     : Colors.white,
                 borderRadius: BorderRadius.circular(AppRadius.lg),
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: context.borderColor),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -1242,10 +1246,10 @@ class _ConnectedStudiosSectionState
                     hasActiveShares
                         ? "Not connected with a studio yet"
                         : "No studio connected yet",
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.text,
+                      color: context.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -1254,9 +1258,9 @@ class _ConnectedStudiosSectionState
                         ? "A studio has shared galleries with you (see below), but you're not fully connected yet. Connect for full access to their gallery."
                         : "Discover studios, explore their work, and connect with a studio.",
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
-                      color: AppColors.subtitle,
+                      color: context.textMuted,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),

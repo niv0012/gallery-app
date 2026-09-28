@@ -5,6 +5,7 @@ import '../../core/theme/app_theme.dart';
 import '../../models/studio_client_connection_model.dart';
 import '../../providers/studio_client_connections_provider.dart';
 import '../../widgets/common/custom_app_bar.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Client-side Invitation Management Screen.
 ///
@@ -204,13 +205,13 @@ class _EmptyState extends StatelessWidget {
       width: double.infinity,
       padding: EdgeInsets.symmetric(vertical: 48, horizontal: 24),
       decoration: BoxDecoration(
-        color: AppColors.surfaceElevated.withValues(alpha: 0.5),
+        color: context.surfaceColor.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         children: [
           Icon(icon,
-              color: AppColors.subtitle.withValues(alpha: 0.4), size: 48),
+              color: context.textMuted.withValues(alpha: 0.4), size: 48),
           SizedBox(height: AppSpacing.md),
           Text(
             message,
@@ -435,7 +436,7 @@ class _RejectedInviteCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: (Theme.of(context).brightness == Brightness.dark ? AppColors.darkSurfaceRaised : AppColors.surfaceElevated),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.borderColor),
       ),
       child: Row(
         children: [

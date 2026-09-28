@@ -20,6 +20,9 @@ import '../../services/download_service_impl.dart';
 import '../../services/media_file_cache.dart';
 import '../../providers/auth_providers.dart' show apiClientProvider;
 import 'package:flutter/foundation.dart' show kIsWeb;
+import '../../core/theme/theme_context.dart';
+import '../../widgets/common/grid_columns_button.dart';
+import '../../widgets/media/media_thumb.dart';
 
 /// Full photo-by-photo browser for a single album inside a studio's Shared
 /// Gallery.
@@ -46,6 +49,9 @@ class _SharedAlbumPreviewScreenState
     extends ConsumerState<SharedAlbumPreviewScreen> {
   List<MediaModel> _mediaList = [];
   bool _isLoading = true;
+
+  /// Grid density chosen from the app-bar picker.
+  int _columns = 3;
   String? _error;
 
   final Set<String> _selectedIds = {};
@@ -216,7 +222,13 @@ class _SharedAlbumPreviewScreenState
                   },
                 ),
               ]
-            : null,
+            : [
+                GridColumnsButton(
+                  columns: _columns,
+                  options: const [2, 3, 4, 6],
+                  onChanged: (c) => setState(() => _columns = c),
+                ),
+              ],
       ),
       body: SafeArea(
         child: RefreshIndicator(
@@ -331,8 +343,8 @@ class _SharedAlbumPreviewScreenState
       physics:
           const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
       padding: EdgeInsets.all(AppSpacing.md),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: _columns,
         crossAxisSpacing: 6,
         mainAxisSpacing: 6,
         childAspectRatio: 1.0,
@@ -340,7 +352,6 @@ class _SharedAlbumPreviewScreenState
       itemCount: _mediaList.length,
       itemBuilder: (context, index) {
         final media = _mediaList[index];
-        final url = media.remoteThumbnailUrl ?? media.remoteUrl;
         // Seed once from the server-provided like_count/is_liked_by_me
         // (harmless no-op after the first build or a real toggle).
         ref.read(mediaLikesCommentsProvider).seedLikeState(media);
@@ -362,26 +373,14 @@ class _SharedAlbumPreviewScreenState
               decoration: BoxDecoration(
                 color: AppColors.darkSurface,
                 borderRadius: BorderRadius.circular(AppRadius.sm),
-                border: Border.all(color: AppColors.border, width: 0.5),
+                border: Border.all(color: context.borderColor, width: 0.5),
               ),
               clipBehavior: Clip.antiAlias,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (url != null)
-                    Image.network(
-                      url,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Center(
-                        child: Icon(Icons.broken_image_rounded,
-                            color: (Theme.of(context).brightness == Brightness.dark ? AppColors.subtitleOnDark : AppColors.subtitle), size: 24),
-                      ),
-                    )
-                  else
-                    Center(
-                      child: Icon(Icons.image_outlined,
-                          color: (Theme.of(context).brightness == Brightness.dark ? AppColors.subtitleOnDark : AppColors.subtitle), size: 24),
-                    ),
+                  MediaThumb(
+                      media: media, cacheWidth: _columns <= 2 ? 720 : 480),
                   if (media.type == MediaType.video)
                     Positioned(
                       right: 6,
@@ -417,7 +416,8 @@ class _SharedAlbumPreviewScreenState
                   // Like + comment overlay — tap targets stop the tap from
                   // bubbling up to the tile's own onTap (which opens the
                   // fullscreen viewer instead).
-                  Positioned(
+                  if (_columns < 6)
+                    Positioned(
                     left: 4,
                     bottom: 4,
                     child: Row(

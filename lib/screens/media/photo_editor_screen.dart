@@ -13,6 +13,7 @@ import '../../models/edit_recipe.dart';
 import '../../providers/media_provider.dart';
 import '../../services/media_file_cache.dart';
 import '../../widgets/common/custom_app_bar.dart';
+import '../../core/theme/theme_context.dart';
 
 class PhotoEditorScreen extends ConsumerStatefulWidget {
   final MediaModel media;
@@ -753,7 +754,7 @@ class _PhotoEditorScreenState extends ConsumerState<PhotoEditorScreen> {
                 flex: 4,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: context.surfaceColor,
                     borderRadius: BorderRadius.vertical(
                         top: Radius.circular(AppRadius.lg)),
                     boxShadow: AppShadows.soft(Colors.black, opacity: 0.1),
@@ -801,7 +802,7 @@ class _PhotoEditorScreenState extends ConsumerState<PhotoEditorScreen> {
       ),
       bottomNavigationBar: SafeArea(
         child: Container(
-          color: Colors.white,
+          color: context.surfaceColor,
           padding: EdgeInsets.fromLTRB(
               AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.sm),
           child: Row(
@@ -1714,7 +1715,7 @@ class _EditorBottomToolbar extends StatelessWidget {
       padding: EdgeInsets.symmetric(
           horizontal: AppSpacing.md, vertical: AppSpacing.sm),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.surfaceColor,
         border: Border(top: BorderSide(color: Colors.grey.shade200)),
       ),
       child: Row(

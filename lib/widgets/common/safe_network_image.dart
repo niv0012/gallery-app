@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Drop-in [Image.network] replacement that never shows Flutter's default
 /// red-X error screen.
@@ -102,9 +103,9 @@ class _Placeholder extends StatelessWidget {
     return Container(
       width: width,
       height: height,
-      color: AppColors.background.withValues(alpha: 0.8),
+      color: context.bgColor.withValues(alpha: 0.8),
       alignment: Alignment.center,
-      child: Icon(icon, size: iconSize, color: AppColors.subtitle),
+      child: Icon(icon, size: iconSize, color: context.textMuted),
     );
   }
 }

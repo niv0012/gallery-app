@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/theme_context.dart';
 
 /// A single row in [StudioDrawer]'s menu list.
 ///
@@ -115,7 +116,7 @@ class _DrawerMenuItemState extends State<DrawerMenuItem> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 7, vertical: 2),
                       decoration: BoxDecoration(
-                        color: selected ? Colors.white : AppColors.accent,
+                        color: selected ? context.surfaceColor : AppColors.accent,
                         borderRadius: BorderRadius.circular(AppRadius.pill),
                       ),
                       child: Text(

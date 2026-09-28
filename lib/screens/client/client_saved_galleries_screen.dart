@@ -11,6 +11,9 @@ import '../../widgets/common/empty_state_card.dart';
 import '../../widgets/common/inline_error_banner.dart';
 import '../media/image_viewer_screen.dart';
 import '../media/video_player_screen.dart';
+import '../../core/theme/theme_context.dart';
+import '../../widgets/common/grid_columns_button.dart';
+import '../../widgets/media/media_thumb.dart';
 
 /// Client-facing "Favorites" destination.
 ///
@@ -37,6 +40,9 @@ class _ClientSavedGalleriesScreenState
     extends ConsumerState<ClientSavedGalleriesScreen> {
   List<MediaModel> _media = [];
   bool _isLoading = true;
+
+  /// Grid density chosen from the app-bar picker.
+  int _columns = 3;
   String? _error;
 
   @override
@@ -100,7 +106,16 @@ class _ClientSavedGalleriesScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const CustomAppBar(title: 'Favorites'),
+      appBar: CustomAppBar(
+        title: 'Favorites',
+        actions: [
+          GridColumnsButton(
+            columns: _columns,
+            options: const [2, 3, 4, 6],
+            onChanged: (c) => setState(() => _columns = c),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           color: AppColors.primary,
@@ -167,8 +182,8 @@ class _ClientSavedGalleriesScreenState
       physics:
           const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
       padding: EdgeInsets.all(AppSpacing.md),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: _columns,
         crossAxisSpacing: 6,
         mainAxisSpacing: 6,
         childAspectRatio: 1.0,
@@ -176,7 +191,6 @@ class _ClientSavedGalleriesScreenState
       itemCount: _media.length,
       itemBuilder: (context, index) {
         final media = _media[index];
-        final url = media.remoteThumbnailUrl ?? media.remoteUrl;
         return GestureDetector(
           onTap: () => _openMedia(index),
           child: Hero(
@@ -185,26 +199,14 @@ class _ClientSavedGalleriesScreenState
               decoration: BoxDecoration(
                 color: AppColors.darkSurface,
                 borderRadius: BorderRadius.circular(AppRadius.sm),
-                border: Border.all(color: AppColors.border, width: 0.5),
+                border: Border.all(color: context.borderColor, width: 0.5),
               ),
               clipBehavior: Clip.antiAlias,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (url != null)
-                    Image.network(
-                      url,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Center(
-                        child: Icon(Icons.broken_image_rounded,
-                            color: (Theme.of(context).brightness == Brightness.dark ? AppColors.subtitleOnDark : AppColors.subtitle), size: 24),
-                      ),
-                    )
-                  else
-                    Center(
-                      child: Icon(Icons.image_outlined,
-                          color: (Theme.of(context).brightness == Brightness.dark ? AppColors.subtitleOnDark : AppColors.subtitle), size: 24),
-                    ),
+                  MediaThumb(
+                      media: media, cacheWidth: _columns <= 2 ? 720 : 480),
                   if (media.type == MediaType.video)
                     Positioned(
                       right: 6,

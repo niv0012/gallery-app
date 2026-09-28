@@ -8,6 +8,7 @@ import '../../providers/folder_provider.dart';
 import '../../widgets/buttons/gradient_button.dart';
 import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/anchored_dropdown_field.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Admin-only Create Folder — reached from [FolderListScreen]'s FAB.
 /// Optionally nests the new folder under an existing one (feeds Move
@@ -141,7 +142,7 @@ class _CreateFolderScreenState extends ConsumerState<CreateFolderScreen> {
                                   Text(
                                     'Loading folders…',
                                     style: TextStyle(
-                                      color: AppColors.subtitle,
+                                      color: context.textMuted,
                                       fontSize: 14,
                                     ),
                                   ),

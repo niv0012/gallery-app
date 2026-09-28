@@ -8,6 +8,7 @@ import 'super_admin_profile_screen.dart';
 import 'super_admin_storage_screen.dart';
 import 'super_admin_subscriptions_screen.dart';
 import 'super_admin_users_screen.dart';
+import '../../core/theme/theme_context.dart';
 
 class _DashboardData {
   final PlatformUsers users;
@@ -56,24 +57,24 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.bgColor,
         elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.text),
+        iconTheme: IconThemeData(color: context.textPrimary),
         automaticallyImplyLeading: false,
         titleSpacing: AppSpacing.md,
-        title: const Text(
+        title: Text(
           'Super Admin',
           style: TextStyle(
-            color: AppColors.text,
+            color: context.textPrimary,
             fontWeight: FontWeight.w700,
             fontSize: 19,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.account_circle_rounded, color: AppColors.subtitle),
+            icon: Icon(Icons.account_circle_rounded, color: context.textMuted),
             tooltip: 'Profile',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SuperAdminProfileScreen()),
@@ -95,14 +96,14 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.error_outline_rounded, color: AppColors.subtitle, size: 32),
+                    Icon(Icons.error_outline_rounded, color: context.textMuted, size: 32),
                     const SizedBox(height: 8),
                     Text(
                       snapshot.error is AdminApiException
                           ? (snapshot.error as AdminApiException).message
                           : 'Could not load dashboard data.',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: AppColors.subtitle),
+                      style: TextStyle(color: context.textMuted),
                     ),
                     const SizedBox(height: 12),
                     TextButton(onPressed: _refresh, child: const Text('Retry')),
@@ -211,10 +212,10 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen> {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                const Text(
+                Text(
                   'Recently joined',
                   style: TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text),
+                      fontSize: 15, fontWeight: FontWeight.w700, color: context.textPrimary),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 if (recentlyJoined.isEmpty)
@@ -225,10 +226,10 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
+                    Text(
                       'Suspended accounts',
                       style: TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text),
+                          fontSize: 15, fontWeight: FontWeight.w700, color: context.textPrimary),
                     ),
                     if (suspended.length > 4)
                       TextButton(
@@ -243,9 +244,9 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen> {
                   ],
                 ),
                 const SizedBox(height: 4),
-                const Text(
+                Text(
                   'Accounts a Super Admin has suspended.',
-                  style: TextStyle(fontSize: 12.5, color: AppColors.subtitle),
+                  style: TextStyle(fontSize: 12.5, color: context.textMuted),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 if (suspended.isEmpty)
@@ -269,7 +270,7 @@ class _EmptySection extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Text(label, style: const TextStyle(color: AppColors.subtitle, fontSize: 12.5)),
+      child: Text(label, style: TextStyle(color: context.textMuted, fontSize: 12.5)),
     );
   }
 }
@@ -297,9 +298,9 @@ class _Kpi extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: AppColors.surfaceElevated,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: context.borderColor),
           boxShadow: [
             BoxShadow(
                 color: gradient.last.withValues(alpha: 0.10),
@@ -326,10 +327,10 @@ class _Kpi extends StatelessWidget {
               child: Text(
                 value,
                 maxLines: 1,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.text,
+                  color: context.textPrimary,
                 ),
               ),
             ),
@@ -338,9 +339,9 @@ class _Kpi extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
-                color: AppColors.subtitle,
+                color: context.textMuted,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -366,12 +367,12 @@ class _RecentUserTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.surfaceElevated,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(
             color: showSuspendedBadge
                 ? AppColors.error.withValues(alpha: 0.4)
-                : AppColors.border),
+                : context.borderColor),
       ),
       child: Row(
         children: [
@@ -393,7 +394,7 @@ class _RecentUserTile extends StatelessWidget {
                 Text(user.fullName,
                     style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
                 Text(user.email,
-                    style: const TextStyle(fontSize: 11.5, color: AppColors.subtitle)),
+                    style: TextStyle(fontSize: 11.5, color: context.textMuted)),
               ],
             ),
           ),
@@ -410,7 +411,7 @@ class _RecentUserTile extends StatelessWidget {
             )
           else
             Text(isStudio ? 'Studio' : 'Client',
-                style: const TextStyle(fontSize: 11, color: AppColors.subtitle)),
+                style: TextStyle(fontSize: 11, color: context.textMuted)),
         ],
       ),
     );
@@ -458,8 +459,8 @@ class _StorageWarningBanner extends StatelessWidget {
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
-                color: AppColors.text,
+              style: TextStyle(
+                color: context.textPrimary,
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),

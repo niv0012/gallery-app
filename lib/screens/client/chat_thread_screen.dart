@@ -8,6 +8,7 @@ import '../../providers/auth_providers.dart';
 import '../../providers/chat_provider.dart';
 import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/screen_backdrop.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Screen for a single chat thread. Takes either a `threadId` or a
 /// `connectionId` via route arguments (the [ChatNotifier] handles both).
@@ -142,7 +143,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           Icon(
             Icons.chat_bubble_outline_rounded,
             size: 48,
-            color: AppColors.subtitle.withValues(alpha: 0.5),
+            color: context.textMuted.withValues(alpha: 0.5),
           ),
           SizedBox(height: 16),
           Text(
@@ -203,7 +204,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 ],
                 border: isMe
                     ? null
-                    : Border.all(color: AppColors.border, width: 0.8),
+                    : Border.all(color: context.borderColor, width: 0.8),
               ),
               child: Text(
                 msg.text,
@@ -239,8 +240,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         color: Theme.of(context).brightness == Brightness.dark
             ? AppColors.darkBackground
             : Colors.white.withValues(alpha: 0.95),
-        border: const Border(
-          top: BorderSide(color: AppColors.border),
+        border: Border(
+          top: BorderSide(color: context.borderColor),
         ),
       ),
       child: Row(
@@ -256,11 +257,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     TextStyle(color: (Theme.of(context).brightness == Brightness.dark ? AppColors.subtitleOnDark : AppColors.subtitle), fontSize: 14.5),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
-                  borderSide: const BorderSide(color: AppColors.border),
+                  borderSide: BorderSide(color: context.borderColor),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
-                  borderSide: const BorderSide(color: AppColors.border),
+                  borderSide: BorderSide(color: context.borderColor),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
@@ -269,7 +270,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 ),
                 contentPadding:
                     EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                fillColor: AppColors.background.withValues(alpha: 0.5),
+                fillColor: context.bgColor.withValues(alpha: 0.5),
                 filled: true,
               ),
             ),

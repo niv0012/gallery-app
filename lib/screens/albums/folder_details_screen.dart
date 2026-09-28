@@ -8,6 +8,7 @@ import '../../providers/album_provider.dart';
 import '../../providers/folder_provider.dart';
 import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/empty_state_card.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Admin-only Folder Details — reached by tapping a folder on
 /// [FolderListScreen]. Fans out to Rename Folder, Move Folder and
@@ -158,7 +159,7 @@ class FolderDetailsScreen extends ConsumerWidget {
                 (a) => Padding(
                   padding: EdgeInsets.only(bottom: AppSpacing.sm),
                   child: Material(
-                    color: Colors.white,
+                    color: context.surfaceColor,
                     borderRadius: BorderRadius.circular(AppRadius.md),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(AppRadius.md),
@@ -170,7 +171,7 @@ class FolderDetailsScreen extends ConsumerWidget {
                         padding: EdgeInsets.all(AppSpacing.md),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(AppRadius.md),
-                          border: Border.all(color: AppColors.border),
+                          border: Border.all(color: context.borderColor),
                         ),
                         child: Row(
                           children: [

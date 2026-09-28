@@ -5,6 +5,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/routes/app_routes.dart';
 import '../../widgets/common/custom_app_bar.dart';
+import '../../core/theme/theme_context.dart';
 
 /// UI for starting a face search: pick/take a selfie, then the buttons
 /// route to Upload -> Scan Progress -> Results, backed by
@@ -46,9 +47,9 @@ class FaceSearchLandingScreen extends StatelessWidget {
   Widget _buildIllustrationCard(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.borderColor),
       ),
       padding: EdgeInsets.all(AppSpacing.lg),
       child: Row(
@@ -87,9 +88,9 @@ class FaceSearchLandingScreen extends StatelessWidget {
   Widget _buildInfoCard(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.borderColor),
       ),
       padding: EdgeInsets.all(AppSpacing.lg),
       child: Row(
@@ -154,7 +155,7 @@ class FaceSearchLandingScreen extends StatelessWidget {
               padding: EdgeInsets.symmetric(vertical: 14, horizontal: 14),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppRadius.md)),
-              side: const BorderSide(color: AppColors.border),
+              side: BorderSide(color: context.borderColor),
             ),
           ),
         ),

@@ -10,6 +10,7 @@ import '../../providers/album_provider.dart';
 import '../../providers/auth_providers.dart';
 import '../../providers/studio_client_connections_provider.dart';
 import '../media/media_grid_screen.dart';
+import '../../core/theme/theme_context.dart';
 
 // Deterministic gradient picker matching DashboardClientDto._gradientFor —
 // used when a ClientData is built from connectionsProvider (no gradient set).
@@ -332,7 +333,7 @@ class _ClientDetailsScreenState extends ConsumerState<ClientDetailsScreen> {
                         ? AppColors.darkSurfaceRaised
                         : AppColors.surfaceElevated),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.border),
+                    border: Border.all(color: context.borderColor),
                     boxShadow: AppShadows.soft(AppColors.primary,
                         opacity: 0.05, blur: 20, y: 8),
                   ),
@@ -429,7 +430,7 @@ class _ClientDetailsScreenState extends ConsumerState<ClientDetailsScreen> {
                         ? AppColors.darkSurfaceRaised
                         : AppColors.surfaceElevated),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.border),
+                    border: Border.all(color: context.borderColor),
                   ),
                   child: Column(
                     children: [
@@ -440,7 +441,7 @@ class _ClientDetailsScreenState extends ConsumerState<ClientDetailsScreen> {
                         valueColor:
                             c.isPaid ? AppColors.success : AppColors.error,
                       ),
-                      const Divider(color: AppColors.border, height: 24),
+                      Divider(color: context.borderColor, height: 24),
                       _DetailRow(
                         icon: Icons.access_time_filled_rounded,
                         label: 'Last Active',
@@ -587,16 +588,16 @@ class _ClientDetailsScreenState extends ConsumerState<ClientDetailsScreen> {
                     width: double.infinity,
                     padding: EdgeInsets.symmetric(vertical: 32, horizontal: 16),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceElevated.withValues(alpha: 0.5),
+                      color: context.surfaceColor.withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                          color: AppColors.border, style: BorderStyle.none),
+                          color: context.borderColor, style: BorderStyle.none),
                     ),
                     alignment: Alignment.center,
                     child: Column(
                       children: [
                         Icon(Icons.link_off_rounded,
-                            color: AppColors.subtitle.withValues(alpha: 0.5),
+                            color: context.textMuted.withValues(alpha: 0.5),
                             size: 40),
                         SizedBox(height: 12),
                         Text(
@@ -627,7 +628,7 @@ class _ClientDetailsScreenState extends ConsumerState<ClientDetailsScreen> {
                                   ? AppColors.darkSurfaceRaised
                                   : AppColors.surfaceElevated),
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: AppColors.border),
+                          border: Border.all(color: context.borderColor),
                         ),
                         child: ListTile(
                           contentPadding: EdgeInsets.symmetric(
@@ -780,7 +781,7 @@ class _StatCard extends StatelessWidget {
             ? AppColors.darkSurfaceRaised
             : AppColors.surfaceElevated),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

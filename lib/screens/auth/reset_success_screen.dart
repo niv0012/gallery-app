@@ -6,6 +6,7 @@ import '../../core/theme/app_theme.dart';
 import '../../widgets/buttons/gradient_button.dart';
 import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/screen_backdrop.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Small reusable success screen shown after a password reset completes:
 /// a scale-in green checkmark badge (mirrors [EmailVerificationScreen]'s
@@ -74,7 +75,7 @@ class _ResetSuccessScreenState extends State<ResetSuccessScreen>
                   style: Theme.of(context)
                       .textTheme
                       .bodyLarge
-                      ?.copyWith(color: AppColors.subtitle),
+                      ?.copyWith(color: context.textMuted),
                 ),
                 const SizedBox(height: AppSpacing.xxl),
                 GradientButton(

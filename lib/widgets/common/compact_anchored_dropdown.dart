@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
 import 'anchored_menu.dart';
+import '../../core/theme/theme_context.dart';
 
 /// A compact, borderless "label + caret" dropdown trigger (matching the
 /// look of Flutter's [DropdownButton] with its underline hidden) whose
@@ -68,7 +69,7 @@ class _CompactAnchoredDropdownState<T>
   Widget _buildMenu(BuildContext context, VoidCallback close) {
     return Material(
       elevation: 8,
-      color: AppColors.surface,
+      color: context.surfaceColor,
       borderRadius: BorderRadius.circular(AppRadius.sm),
       clipBehavior: Clip.antiAlias,
       child: ListView(
@@ -89,7 +90,7 @@ class _CompactAnchoredDropdownState<T>
               child: DefaultTextStyle.merge(
                 style: (widget.style ?? const TextStyle()).copyWith(
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  color: selected ? AppColors.primary : AppColors.text,
+                  color: selected ? AppColors.primary : context.textPrimary,
                 ),
                 child: item.child,
               ),
@@ -125,7 +126,7 @@ class _CompactAnchoredDropdownState<T>
                     ? Icons.arrow_drop_up_rounded
                     : Icons.arrow_drop_down_rounded,
                 size: widget.iconSize + 4,
-                color: widget.style?.color ?? Colors.black87,
+                color: widget.style?.color ?? context.textPrimary,
               ),
             ],
           ),

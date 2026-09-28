@@ -10,6 +10,7 @@ import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/inline_error_banner.dart';
 import '../../widgets/common/loading_widget.dart';
 import '../../widgets/common/screen_backdrop.dart';
+import '../../core/theme/theme_context.dart';
 
 class DiscoverStudiosScreen extends ConsumerStatefulWidget {
   const DiscoverStudiosScreen({super.key});
@@ -85,7 +86,7 @@ class _DiscoverStudiosScreenState extends ConsumerState<DiscoverStudiosScreen> {
                         horizontal: 16, vertical: 14),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(color: AppColors.border),
+                      borderSide: BorderSide(color: context.borderColor),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -139,7 +140,7 @@ class _DiscoverStudiosScreenState extends ConsumerState<DiscoverStudiosScreen> {
                           side: BorderSide(
                             color: isSelected
                                 ? AppColors.primary
-                                : AppColors.border,
+                                : context.borderColor,
                           ),
                         ),
                       ),
@@ -237,7 +238,7 @@ class _DiscoverStudiosScreenState extends ConsumerState<DiscoverStudiosScreen> {
           Container(
             padding: EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: AppColors.border.withValues(alpha: 0.4),
+              color: context.borderColor.withValues(alpha: 0.4),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -307,14 +308,14 @@ class StudioCard extends ConsumerWidget {
                         loadingBuilder: (context, child, loadingProgress) {
                           if (loadingProgress == null) return child;
                           return Container(
-                            color: AppColors.border.withValues(alpha: 0.5),
+                            color: context.borderColor.withValues(alpha: 0.5),
                             child: Center(
                               child: CircularProgressIndicator(strokeWidth: 2),
                             ),
                           );
                         },
                         errorBuilder: (context, error, stackTrace) => Container(
-                          color: AppColors.border,
+                          color: context.borderColor,
                           child: Icon(Icons.image_rounded,
                               color: (Theme.of(context).brightness == Brightness.dark ? AppColors.subtitleOnDark : AppColors.subtitle)),
                         ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/theme_context.dart';
 
 class MediaLikeButton extends StatefulWidget {
   final bool liked;
@@ -59,7 +60,7 @@ class _MediaLikeButtonState extends State<MediaLikeButton>
   @override
   Widget build(BuildContext context) {
     final liked = widget.liked;
-    final iconColor = liked ? AppColors.accent : AppColors.subtitle;
+    final iconColor = liked ? AppColors.accent : context.textMuted;
 
     return Material(
       color: Colors.transparent,
@@ -106,7 +107,7 @@ class _MediaLikeButtonState extends State<MediaLikeButton>
               AnimatedDefaultTextStyle(
                 duration: const Duration(milliseconds: 180),
                 style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-                      color: AppColors.text,
+                      color: context.textPrimary,
                       fontWeight: FontWeight.w800,
                     ),
                 child: Text('${widget.likeCount}'),
@@ -118,7 +119,7 @@ class _MediaLikeButtonState extends State<MediaLikeButton>
                   key: ValueKey<String>(liked ? 'liked' : 'like'),
                   liked ? 'Liked' : 'Like',
                   style: Theme.of(context).textTheme.bodySmall!.copyWith(
-                        color: AppColors.subtitle,
+                        color: context.textMuted,
                         fontWeight: FontWeight.w700,
                       ),
                 ),

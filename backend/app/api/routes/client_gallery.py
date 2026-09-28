@@ -15,7 +15,7 @@ from app.core.storage import build_media_url
 from app.db.session import get_db
 from app.models.album_share import AlbumClientShare
 from app.models.connection import ConnectionStatus, StudioClientConnection
-from app.models.gallery import Album, DownloadEvent, DownloadSource, Folder, Media, MediaLike, MediaType, ShareLink
+from app.models.gallery import Album, DownloadEvent, DownloadSource, Folder, Media, MediaLike, MediaType, ShareLink, GalleryViewEvent
 from app.models.user import User, UserRole
 from app.schemas.gallery import AlbumRead, DownloadEventCreate, DownloadEventRead, MediaRead
 from app.schemas.gallery_share import SharedFolderRead, SharedStudioRead
@@ -121,25 +121,29 @@ def list_shared_studios(
        to also add an explicit share row.
     """
     # ── Path 1: explicit per-album shares ──────────────────────────────
-    explicit_rows = db.execute(
+    explicit_album_rows = db.execute(
         select(
             AlbumClientShare.studio_id,
-            # Count distinct albums (not raw rows) so the displayed count
-            # matches what list_shared_albums_for_studio actually returns.
-            func.count(func.distinct(AlbumClientShare.album_id)),
-            func.max(AlbumClientShare.shared_at),
+            AlbumClientShare.album_id,
+            AlbumClientShare.shared_at,
         )
         .where(
             AlbumClientShare.client_id == current_user.id,
             AlbumClientShare.revoked_at.is_(None),
         )
-        .group_by(AlbumClientShare.studio_id)
     ).all()
 
-    # studio_id -> (shared_count, latest_at)
-    explicit_map: dict[uuid.UUID, tuple[int, object]] = {
-        sid: (cnt, lat) for sid, cnt, lat in explicit_rows
-    }
+    studio_albums: dict[uuid.UUID, set[uuid.UUID]] = {}
+    studio_latest: dict[uuid.UUID, object] = {}
+
+    for sid, aid, lat in explicit_album_rows:
+        if sid not in studio_albums:
+            studio_albums[sid] = set()
+        studio_albums[sid].add(aid)
+        
+        current_lat = studio_latest.get(sid)
+        if lat is not None and (current_lat is None or lat > current_lat):
+            studio_latest[sid] = lat
 
     # ── Path 2: public share links from connected studios ───────────────
     now = datetime.now(timezone.utc)
@@ -154,13 +158,12 @@ def list_shared_studios(
         ).scalars().all()
     )
 
-    implicit_map: dict[uuid.UUID, tuple[int, object]] = {}
     if connected_studio_ids:
-        implicit_rows = db.execute(
+        implicit_album_rows = db.execute(
             select(
                 ShareLink.owner_id,
-                func.count(func.distinct(ShareLink.album_id)),
-                func.max(ShareLink.created_at),
+                ShareLink.album_id,
+                ShareLink.created_at,
             )
             .where(
                 ShareLink.owner_id.in_(connected_studio_ids),
@@ -171,18 +174,18 @@ def list_shared_studios(
                     | (ShareLink.expires_at > now)  # type: ignore[operator]
                 ),
             )
-            .group_by(ShareLink.owner_id)
         ).all()
-        for sid, cnt, lat in implicit_rows:
-            implicit_map[sid] = (cnt, lat)
+        
+        for sid, aid, lat in implicit_album_rows:
+            if sid not in studio_albums:
+                studio_albums[sid] = set()
+            studio_albums[sid].add(aid)
 
-    # ── Merge: explicit takes priority; for studios in both paths, sum
-    # counts from each source without double-counting albums that appear
-    # in both (conservative: we do NOT subtract overlap here because the
-    # overlap is typically zero and an exact dedup would require a
-    # separate per-studio query; overshooting by a few is fine and
-    # vanishes once albums are listed directly). ──────────────────────
-    all_studio_ids: set[uuid.UUID] = set(explicit_map) | set(implicit_map)
+            current_lat = studio_latest.get(sid)
+            if lat is not None and (current_lat is None or lat > current_lat):
+                studio_latest[sid] = lat
+
+    all_studio_ids = set(studio_albums.keys())
     if not all_studio_ids:
         return []
 
@@ -194,13 +197,7 @@ def list_shared_studios(
     # Build result sorted by most-recently-shared descending.
     combined: list[tuple[uuid.UUID, int, object]] = []
     for sid in all_studio_ids:
-        explicit_cnt, explicit_lat = explicit_map.get(sid, (0, None))
-        implicit_cnt, implicit_lat = implicit_map.get(sid, (0, None))
-        total_cnt = explicit_cnt + implicit_cnt
-        # latest across both paths
-        lats = [x for x in [explicit_lat, implicit_lat] if x is not None]
-        latest = max(lats) if lats else None
-        combined.append((sid, total_cnt, latest))
+        combined.append((sid, len(studio_albums[sid]), studio_latest.get(sid)))
 
     combined.sort(key=lambda x: x[2] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
 
@@ -402,6 +399,15 @@ def list_shared_album_media(
         .scalars()
         .all()
     )
+
+    if skip == 0:
+        db.add(GalleryViewEvent(
+            owner_id=studio_id,
+            album_id=album_id,
+            viewer_id=current_user.id
+        ))
+        db.commit()
+
 
     counts, liked = _like_info_for(db, [m.id for m in media_items], current_user.id)
     comment_counts = _comment_count_for(db, [m.id for m in media_items])

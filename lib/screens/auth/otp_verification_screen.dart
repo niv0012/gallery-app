@@ -9,6 +9,7 @@ import '../../widgets/buttons/gradient_button.dart';
 import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/screen_backdrop.dart';
 import '../../widgets/inputs/otp_input_field.dart';
+import '../../core/theme/theme_context.dart';
 
 /// OTP Verification Screen — same glass/gradient auth language as
 /// [EmailVerificationScreen], but for a numeric one-time code sent to
@@ -165,7 +166,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         style: Theme.of(context)
                             .textTheme
                             .bodyLarge
-                            ?.copyWith(color: AppColors.subtitle),
+                            ?.copyWith(color: context.textMuted),
                       ),
                       const SizedBox(height: AppSpacing.xxl),
                       OtpInputField(
@@ -214,7 +215,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                                   style: TextStyle(
                                     color: _secondsLeft == 0
                                         ? AppColors.primary
-                                        : AppColors.subtitle,
+                                        : context.textMuted,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),

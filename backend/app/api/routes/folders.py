@@ -1,8 +1,15 @@
+import logging
+import os
+import tempfile
 import uuid
+import zipfile
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
+import sqlalchemy as sa
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import aliased
 
 from app.api.deps import get_current_studio_user, require_active_plan
 from app.db.session import get_db
@@ -10,6 +17,9 @@ from app.models.gallery import Album, Folder, Media
 from app.models.user import User
 from app.schemas.gallery import FolderCreate, FolderRead, FolderStatsRead, FolderUpdate
 from app.schemas.user import MessageResponse
+from app.core.storage import _fetch_to_temp
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/folders", tags=["gallery-folders"])
 
@@ -319,3 +329,106 @@ def delete_folder(
     db.delete(folder)
     db.commit()
     return MessageResponse(message="Folder deleted.")
+
+
+@router.get("/{folder_id}/zip", response_class=FileResponse)
+def download_folder_zip(
+    folder_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_studio_user),
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    folder = _get_owned_folder(db, folder_id, current_user.id)
+
+    # 1. Recursive CTE for sub-folders
+    folder_cte = select(Folder.id).where(Folder.id == folder_id).cte(name="folder_cte", recursive=True)
+    folder_alias = aliased(Folder)
+    folder_cte = folder_cte.union_all(
+        select(folder_alias.id).where(folder_alias.parent_id == folder_cte.c.id)
+    )
+    all_folder_ids_list = db.execute(select(folder_cte.c.id)).scalars().all()
+
+    if not all_folder_ids_list:
+        raise HTTPException(status_code=404, detail="Folder not found")
+
+    # 2. Get albums in these folders
+    album_ids_list = db.execute(
+        select(Album.id).where(Album.folder_id.in_(all_folder_ids_list))
+    ).scalars().all()
+
+    # 3. Get Media
+    media_items = db.execute(
+        select(Media).where(
+            Media.is_deleted.is_(False),
+            Media.owner_id == current_user.id,
+            sa.or_(
+                Media.folder_id.in_(all_folder_ids_list),
+                Media.album_id.in_(album_ids_list)
+            )
+        )
+    ).scalars().all()
+
+    if not media_items:
+        raise HTTPException(status_code=404, detail="No media found in folder")
+
+    # 4. Build names map
+    folder_map = {f.id: f for f in db.execute(select(Folder).where(Folder.id.in_(all_folder_ids_list))).scalars().all()}
+    album_map = {a.id: a for a in db.execute(select(Album).where(Album.id.in_(album_ids_list))).scalars().all()}
+
+    def build_path(m: Media) -> str:
+        parts = []
+        if m.album_id and m.album_id in album_map:
+            album = album_map[m.album_id]
+            parts.append(album.name)
+            fid = album.folder_id
+        else:
+            fid = m.folder_id
+
+        while fid and fid in folder_map:
+            parts.append(folder_map[fid].name)
+            if fid == folder_id:
+                break
+            fid = folder_map[fid].parent_id
+
+        parts.reverse()
+        return "/".join(parts) + "/" + m.file_name
+
+    # 5. Create Temp ZIP
+    tmp = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
+    tmp_path = tmp.name
+    tmp.close()
+    background_tasks.add_task(os.remove, tmp_path)
+
+    with zipfile.ZipFile(tmp_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+        added_paths = set()
+        for m in media_items:
+            try:
+                local_f = _fetch_to_temp(m.file_path)
+            except Exception as e:
+                logger.error(f"Failed to fetch {m.file_path}: {e}")
+                continue
+
+            arcname = build_path(m)
+            base_arcname = arcname
+            counter = 1
+            while arcname in added_paths:
+                parts = base_arcname.rsplit('.', 1)
+                if len(parts) == 2:
+                    arcname = f"{parts[0]}_{counter}.{parts[1]}"
+                else:
+                    arcname = f"{base_arcname}_{counter}"
+                counter += 1
+            added_paths.add(arcname)
+
+            zf.write(local_f, arcname)
+            
+            if tempfile.gettempdir() in str(local_f):
+                os.remove(local_f)
+
+    safe_name = folder.name.replace(" ", "_")
+    return FileResponse(
+        tmp_path,
+        media_type="application/zip",
+        filename=f"{safe_name}.zip"
+    )
+

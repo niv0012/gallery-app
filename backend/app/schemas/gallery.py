@@ -483,6 +483,7 @@ class PublicShareLinkRead(BaseModel):
     allow_download: bool
     show_watermark: bool
     requires_password: bool
+    studio_logo_url: str | None = None
 
 
 class ShareLinkStatusRead(BaseModel):

@@ -30,6 +30,7 @@ from app.models.activity_log import ActivityType
 from app.models.album_share import AlbumClientShare
 from app.models.connection import ConnectionStatus, StudioClientConnection
 from app.models.gallery import Album, Folder, Media, MediaComment, MediaLike, MediaType
+from app.models.notification import Notification, NotificationType
 from app.models.user import User, UserRole
 from app.schemas.gallery import (
     MediaCommentCreate,
@@ -863,7 +864,7 @@ def toggle_like(
     Open to both studios (their own media) and clients (media in an
     album shared with them) — see `_get_accessible_media`.
     """
-    _get_accessible_media(db, media_id, current_user)
+    media = _get_accessible_media(db, media_id, current_user)
 
     existing = db.execute(
         select(MediaLike).where(
@@ -879,6 +880,16 @@ def toggle_like(
         like = MediaLike(media_id=media_id, user_id=current_user.id)
         db.add(like)
         liked = True
+        
+        if current_user.id != media.owner_id:
+            notification = Notification(
+                user_id=media.owner_id,
+                type=NotificationType.gallery,
+                title="New Like",
+                subtitle=f"{current_user.full_name} liked a photo.",
+                data={"media_id": str(media_id), "album_id": str(media.album_id)}
+            )
+            db.add(notification)
 
     db.commit()
 
@@ -927,7 +938,7 @@ def create_comment(
     """Adds a comment (or reply) to a media item. Open to both studios
     and clients viewing a shared album — see `_get_accessible_media`.
     """
-    _get_accessible_media(db, media_id, current_user)
+    media = _get_accessible_media(db, media_id, current_user)
 
     if payload.parent_id is not None:
         parent = db.get(MediaComment, payload.parent_id)
@@ -941,6 +952,16 @@ def create_comment(
         text=payload.text,
     )
     db.add(comment)
+    
+    if current_user.id != media.owner_id:
+        notification = Notification(
+            user_id=media.owner_id,
+            type=NotificationType.gallery,
+            title="New Comment",
+            subtitle=f"{current_user.full_name} commented on a photo.",
+            data={"media_id": str(media_id), "album_id": str(media.album_id), "comment_id": str(comment.id)}
+        )
+        db.add(notification)
     db.commit()
     db.refresh(comment)
 

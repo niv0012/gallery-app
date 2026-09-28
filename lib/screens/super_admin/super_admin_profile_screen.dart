@@ -4,6 +4,7 @@ import '../../core/api/admin_api_client.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/routes/app_routes.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Account screen for the signed-in Super Admin — who they are, and the
 /// place "Log out" actually lives (see [AdminApiClient.clearToken]).
@@ -64,14 +65,14 @@ class _SuperAdminProfileScreenState extends State<SuperAdminProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.bgColor,
         elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.text),
-        title: const Text(
+        iconTheme: IconThemeData(color: context.textPrimary),
+        title: Text(
           'Profile',
-          style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w700, fontSize: 18),
+          style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.w700, fontSize: 18),
         ),
       ),
       body: FutureBuilder<SuperAdmin?>(
@@ -91,9 +92,9 @@ class _SuperAdminProfileScreenState extends State<SuperAdminProfileScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
+                    Text(
                       'Your session has expired.',
-                      style: TextStyle(color: AppColors.subtitle, fontSize: 14),
+                      style: TextStyle(color: context.textMuted, fontSize: 14),
                     ),
                     const SizedBox(height: AppSpacing.md),
                     ElevatedButton(
@@ -173,7 +174,7 @@ class _SuperAdminProfileScreenState extends State<SuperAdminProfileScreen> {
                   onPressed: _loggingOut ? null : _confirmLogout,
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    side: const BorderSide(color: AppColors.border),
+                    side: BorderSide(color: context.borderColor),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(AppRadius.sm)),
                   ),
@@ -215,16 +216,16 @@ class _InfoCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.surfaceElevated,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title,
-              style: const TextStyle(
-                  fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.text)),
+              style: TextStyle(
+                  fontWeight: FontWeight.w700, fontSize: 14, color: context.textPrimary)),
           const SizedBox(height: 8),
           ...rows,
         ],
@@ -246,12 +247,12 @@ class _InfoRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 110,
-            child: Text(label, style: const TextStyle(fontSize: 12.5, color: AppColors.subtitle)),
+            child: Text(label, style: TextStyle(fontSize: 12.5, color: context.textMuted)),
           ),
           Expanded(
             child: Text(value,
-                style: const TextStyle(
-                    fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.text)),
+                style: TextStyle(
+                    fontSize: 12.5, fontWeight: FontWeight.w600, color: context.textPrimary)),
           ),
         ],
       ),

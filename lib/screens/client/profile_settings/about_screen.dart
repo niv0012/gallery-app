@@ -6,6 +6,7 @@ import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../providers/app_info_provider.dart';
 import '../../../widgets/common/custom_app_bar.dart';
+import '../../../core/theme/theme_context.dart';
 
 class AboutScreen extends ConsumerWidget {
   const AboutScreen({super.key});
@@ -34,7 +35,7 @@ class AboutScreen extends ConsumerWidget {
                 color: Theme.of(context).brightness == Brightness.dark
                     ? AppColors.darkSurface
                     : Colors.white,
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: context.borderColor),
                 borderRadius: BorderRadius.circular(AppRadius.lg),
               ),
               child: Row(
@@ -112,7 +113,7 @@ class _SectionTile extends StatelessWidget {
           color: Theme.of(context).brightness == Brightness.dark
               ? AppColors.darkSurface
               : Colors.white,
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: context.borderColor),
           borderRadius: BorderRadius.circular(AppRadius.lg),
         ),
         child: Row(
@@ -123,7 +124,7 @@ class _SectionTile extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.primary.withValues(alpha: 0.10),
                 shape: BoxShape.circle,
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: context.borderColor),
               ),
               child: Icon(icon, color: AppColors.primary),
             ),

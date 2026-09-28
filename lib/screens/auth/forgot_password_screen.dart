@@ -12,6 +12,7 @@ import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/inline_error_banner.dart';
 import '../../widgets/common/screen_backdrop.dart';
 import '../../widgets/inputs/custom_text_field.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Forgot Password: a large gradient illustration, an email field and a
 /// gradient Send Reset Link button, with a Back to Login link.
@@ -109,7 +110,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                     style: Theme.of(context)
                         .textTheme
                         .bodyLarge
-                        ?.copyWith(color: AppColors.subtitle),
+                        ?.copyWith(color: context.textMuted),
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   if (_errorMessage != null) ...[

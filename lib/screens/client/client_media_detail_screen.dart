@@ -322,7 +322,8 @@ class _ClientMediaDetailScreenState
                   children: [
                     Hero(
                       tag: widget.heroTag ?? media.id,
-                      child: MediaThumb(media: media, fit: BoxFit.cover),
+                      child: MediaThumb(
+                          media: media, fit: BoxFit.cover, cacheWidth: 1080),
                     ),
                     if (media.type == MediaType.video)
                       Center(

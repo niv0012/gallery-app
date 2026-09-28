@@ -12,6 +12,7 @@ import '../../../widgets/common/inline_error_banner.dart';
 import '../../../widgets/common/loading_widget.dart';
 import '../common/expandable_faq_section.dart';
 import 'help_support_content.dart';
+import '../../../core/theme/theme_context.dart';
 
 /// Unwraps [ApiException] to its `message` (already the FastAPI `detail`
 /// string), falling back to a generic message for anything else (timeout,
@@ -99,7 +100,7 @@ class _IntroBlock extends StatelessWidget {
           Text(
             'Last updated: $lastUpdated',
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppColors.subtitle,
+                  color: context.textMuted,
                   fontWeight: FontWeight.w700,
                 ),
           ),

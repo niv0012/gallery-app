@@ -13,6 +13,7 @@ import '../../providers/settings_provider.dart';
 import '../../providers/studio_provider.dart';
 import '../../providers/user_providers.dart';
 import '../../services/media_picker_service.dart' show MediaContentType;
+import '../../services/studio_logo_actions.dart';
 import '../../services/studio_media_upload_service.dart'
     show StudioPortfolioImage;
 import '../../widgets/cards/glass_card.dart';
@@ -93,7 +94,15 @@ class _EditStudioProfileScreenState
               ),
         );
 
-    final nextLogo = authUser?.avatarUrl ?? studio?.logoUrl ?? _logoPath;
+    final String? nextLogo;
+    if (authUser != null) {
+      // The signed-in user's avatar is the source of truth; an empty value
+      // means "no logo" and must not fall back to stale cached copies.
+      final avatar = authUser.avatarUrl;
+      nextLogo = (avatar != null && avatar.isNotEmpty) ? avatar : null;
+    } else {
+      nextLogo = studio?.logoUrl ?? _logoPath;
+    }
     final nextCover = authUser?.coverImageUrl ?? studio?.coverUrl ?? _coverPath;
 
     if (_logoPath != nextLogo || _coverPath != nextCover) {
@@ -227,6 +236,85 @@ class _EditStudioProfileScreenState
     _youtubeController.dispose();
     _pinterestController.dispose();
     super.dispose();
+  }
+
+  /// Tap on the logo camera badge: straight to the picker when there is no
+  /// logo yet, otherwise a Change / Remove sheet.
+  Future<void> _onLogoBadgeTap() async {
+    if (_isUploadingLogo) return;
+    final hasLogo = _logoPath != null && _logoPath!.isNotEmpty;
+    if (!hasLogo) {
+      await _pickImage(true);
+      return;
+    }
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded),
+              title: const Text('Change logo'),
+              onTap: () => Navigator.of(ctx).pop('change'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded,
+                  color: AppColors.error),
+              title: const Text('Remove logo',
+                  style: TextStyle(color: AppColors.error)),
+              onTap: () => Navigator.of(ctx).pop('remove'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (action == 'change') await _pickImage(true);
+    if (action == 'remove') await _removeLogo();
+  }
+
+  /// Removes the studio logo (`DELETE /studios/me/avatar`) after a
+  /// confirmation. Like uploads, it applies immediately — no need to press
+  /// "Save Changes".
+  Future<void> _removeLogo() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove logo?'),
+        content:
+            const Text('Your studio will go back to the default camera icon.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final container = ProviderScope.containerOf(context, listen: false);
+    setState(() => _isUploadingLogo = true);
+    try {
+      await StudioLogoActions.remove(container);
+      if (!mounted) return;
+      setState(() => _logoPath = null);
+      SnackBarHelper.showSuccess(context, 'Studio logo removed.');
+    } catch (_) {
+      if (mounted) {
+        SnackBarHelper.showError(
+            context, "Couldn't remove the logo. Please try again.");
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingLogo = false);
+    }
   }
 
   /// Picks a logo ([isLogo] true) or cover ([isLogo] false) image and
@@ -781,7 +869,7 @@ class _EditStudioProfileScreenState
                                       child: IconButton(
                                         icon: Icon(Icons.camera_alt_rounded,
                                             color: Colors.white, size: 14),
-                                        onPressed: () => _pickImage(true),
+                                        onPressed: _onLogoBadgeTap,
                                         padding: EdgeInsets.zero,
                                         constraints: const BoxConstraints(),
                                       ),
@@ -810,6 +898,27 @@ class _EditStudioProfileScreenState
                                         fontSize: 11.5,
                                       ),
                                     ),
+                                    if (_logoPath != null &&
+                                        _logoPath!.isNotEmpty) ...[
+                                      SizedBox(height: 6),
+                                      TextButton.icon(
+                                        onPressed: _isUploadingLogo
+                                            ? null
+                                            : _removeLogo,
+                                        icon: Icon(
+                                            Icons.delete_outline_rounded,
+                                            size: 16),
+                                        label: Text('Remove logo'),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: AppColors.error,
+                                          padding: EdgeInsets.zero,
+                                          minimumSize: Size(0, 32),
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                          alignment: Alignment.centerLeft,
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),

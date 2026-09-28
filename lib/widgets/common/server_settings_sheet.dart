@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/network/api_client.dart';
 import '../../core/storage/server_config_storage.dart';
-import '../../core/theme/app_theme.dart';
 import '../buttons/gradient_button.dart';
 import '../inputs/custom_text_field.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Dev-facing "change the backend host without editing code" sheet.
 /// Opened from the small gear icon on [SplashScreen]. Saving:
@@ -84,8 +84,8 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
       child: Container(
         padding: const EdgeInsets.fromLTRB(
             AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.xl),
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
+        decoration: BoxDecoration(
+          color: context.surfaceColor,
           borderRadius:
               BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
         ),
@@ -99,7 +99,7 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: AppSpacing.md),
                 decoration: BoxDecoration(
-                    color: AppColors.border,
+                    color: context.borderColor,
                     borderRadius: BorderRadius.circular(4)),
               ),
             ),

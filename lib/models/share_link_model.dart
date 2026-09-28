@@ -212,6 +212,7 @@ class PublicGalleryData {
   final bool allowDownload;
   final bool showWatermark;
   final bool requiresPassword;
+  final String? studioLogoUrl;
 
   const PublicGalleryData({
     required this.token,
@@ -222,6 +223,7 @@ class PublicGalleryData {
     required this.allowDownload,
     required this.showWatermark,
     required this.requiresPassword,
+    this.studioLogoUrl,
   });
 
   factory PublicGalleryData.fromApiJson(Map<String, dynamic> json) {
@@ -244,6 +246,7 @@ class PublicGalleryData {
       allowDownload: json['allow_download'] as bool? ?? true,
       showWatermark: json['show_watermark'] as bool? ?? false,
       requiresPassword: json['requires_password'] as bool? ?? false,
+      studioLogoUrl: json['studio_logo_url'] as String?,
     );
   }
 }

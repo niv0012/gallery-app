@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/media_comment.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Upgraded comments UI:
 /// - Scrollable comment list
@@ -132,14 +133,14 @@ class _MediaCommentsSectionState extends State<MediaCommentsSection> {
                 'Comments',
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w900,
-                  color: AppColors.text,
+                  color: context.textPrimary,
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
               Text(
                 '(${widget.comments.length})',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.subtitle,
+                  color: context.textMuted,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -163,7 +164,7 @@ class _MediaCommentsSectionState extends State<MediaCommentsSection> {
               child: Text(
                 'Be the first to comment.',
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: AppColors.subtitle,
+                  color: context.textMuted,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -197,9 +198,9 @@ class _MediaCommentsSectionState extends State<MediaCommentsSection> {
               AppSpacing.md,
             ),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.surfaceColor,
               border: Border.all(
-                color: AppColors.border.withValues(alpha: 0.55),
+                color: context.borderColor.withValues(alpha: 0.55),
               ),
               borderRadius: BorderRadius.circular(16),
             ),
@@ -215,14 +216,14 @@ class _MediaCommentsSectionState extends State<MediaCommentsSection> {
                         'Add a comment',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w900,
-                          color: AppColors.text,
+                          color: context.textPrimary,
                         ),
                       ),
                     ),
                     Text(
                       '${_composerController.text.characters.length}/$_maxChars',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppColors.subtitle,
+                        color: context.textMuted,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -240,11 +241,11 @@ class _MediaCommentsSectionState extends State<MediaCommentsSection> {
                     decoration: InputDecoration(
                       hintText: 'Write something…',
                       filled: true,
-                      fillColor: AppColors.background.withValues(alpha: 0.55),
+                      fillColor: context.bgColor.withValues(alpha: 0.55),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(AppRadius.lg),
                         borderSide: BorderSide(
-                          color: AppColors.border.withValues(alpha: 0.6),
+                          color: context.borderColor.withValues(alpha: 0.6),
                         ),
                       ),
                       counterText: '',
@@ -435,14 +436,14 @@ class _CommentCardState extends State<_CommentCard> {
                           // Username placeholder as requested.
                           style: theme.textTheme.bodyMedium?.copyWith(
                             fontWeight: FontWeight.w900,
-                            color: AppColors.text,
+                            color: context.textPrimary,
                           ),
                         ),
                         const SizedBox(width: AppSpacing.sm),
                         Text(
                           widget.relativeTimestamp(widget.comment.createdAt),
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: AppColors.subtitle,
+                            color: context.textMuted,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -456,13 +457,13 @@ class _CommentCardState extends State<_CommentCard> {
                         color: Colors.white.withValues(alpha: 0.78),
                         borderRadius: BorderRadius.circular(AppRadius.lg),
                         border: Border.all(
-                          color: AppColors.border.withValues(alpha: 0.55),
+                          color: context.borderColor.withValues(alpha: 0.55),
                         ),
                       ),
                       child: Text(
                         _editing ? _editController.text : widget.comment.text,
                         style: theme.textTheme.bodyMedium
-                            ?.copyWith(color: AppColors.text),
+                            ?.copyWith(color: context.textPrimary),
                       ),
                     ),
                     if (_editing) ...[
@@ -475,11 +476,11 @@ class _CommentCardState extends State<_CommentCard> {
                           hintText: 'Edit comment…',
                           filled: true,
                           fillColor:
-                              AppColors.background.withValues(alpha: 0.55),
+                              context.bgColor.withValues(alpha: 0.55),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(AppRadius.lg),
                             borderSide: BorderSide(
-                              color: AppColors.border.withValues(alpha: 0.6),
+                              color: context.borderColor.withValues(alpha: 0.6),
                             ),
                           ),
                         ),
@@ -571,14 +572,14 @@ class _CommentCardState extends State<_CommentCard> {
                               decoration: InputDecoration(
                                 hintText: 'Write a reply…',
                                 filled: true,
-                                fillColor: AppColors.background
+                                fillColor: context.bgColor
                                     .withValues(alpha: 0.55),
                                 border: OutlineInputBorder(
                                   borderRadius:
                                       BorderRadius.circular(AppRadius.lg),
                                   borderSide: BorderSide(
                                     color:
-                                        AppColors.border.withValues(alpha: 0.6),
+                                        context.borderColor.withValues(alpha: 0.6),
                                   ),
                                 ),
                               ),
@@ -721,14 +722,14 @@ class _ReplyCardState extends State<_ReplyCard> {
                           _isMine ? 'You' : 'user',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             fontWeight: FontWeight.w900,
-                            color: AppColors.text,
+                            color: context.textPrimary,
                           ),
                         ),
                         const SizedBox(width: AppSpacing.sm),
                         Text(
                           widget.relativeTimestamp(widget.reply.createdAt),
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: AppColors.subtitle,
+                            color: context.textMuted,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -742,13 +743,13 @@ class _ReplyCardState extends State<_ReplyCard> {
                         color: Colors.white.withValues(alpha: 0.78),
                         borderRadius: BorderRadius.circular(AppRadius.lg),
                         border: Border.all(
-                          color: AppColors.border.withValues(alpha: 0.55),
+                          color: context.borderColor.withValues(alpha: 0.55),
                         ),
                       ),
                       child: Text(
                         _editing ? _editController.text : widget.reply.text,
                         style: theme.textTheme.bodyMedium
-                            ?.copyWith(color: AppColors.text),
+                            ?.copyWith(color: context.textPrimary),
                       ),
                     ),
 
@@ -833,11 +834,11 @@ class _ReplyCardState extends State<_ReplyCard> {
                           hintText: 'Edit reply…',
                           filled: true,
                           fillColor:
-                              AppColors.background.withValues(alpha: 0.55),
+                              context.bgColor.withValues(alpha: 0.55),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(AppRadius.lg),
                             borderSide: BorderSide(
-                              color: AppColors.border.withValues(alpha: 0.6),
+                              color: context.borderColor.withValues(alpha: 0.6),
                             ),
                           ),
                         ),

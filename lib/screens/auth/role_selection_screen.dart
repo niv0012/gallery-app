@@ -8,6 +8,7 @@ import '../../widgets/cards/role_card.dart';
 import '../../widgets/common/auth_container.dart';
 import '../../widgets/common/logo_widget.dart';
 import '../../widgets/common/screen_backdrop.dart';
+import '../../core/theme/theme_context.dart';
 
 /// The most important screen per the brief: two large, glass, gradient-
 /// bordered role cards with a selection animation, followed by a Continue
@@ -46,7 +47,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                   style: Theme.of(context)
                       .textTheme
                       .bodyLarge
-                      ?.copyWith(color: AppColors.subtitle),
+                      ?.copyWith(color: context.textMuted),
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 RoleCard(

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_studio_user
 from app.db.session import get_db
 from app.models.connection import ConnectionStatus, StudioClientConnection
-from app.models.gallery import DownloadEvent, Media, MediaType, ShareLink
+from app.models.gallery import DownloadEvent, Media, MediaType, ShareLink, GalleryViewEvent
 from app.models.user import User
 from app.schemas.admin_dashboard import (
     AdminDashboardStatsRead,
@@ -161,10 +161,25 @@ def get_client_stats(
             galleries_by_client[cid_str] = []
         galleries_by_client[cid_str].append(str(aid))
 
+    # --- views per client ---
+    view_rows = db.execute(
+        select(
+            GalleryViewEvent.viewer_id,
+            func.count().label("cnt"),
+        )
+        .where(
+            GalleryViewEvent.owner_id == current_user.id,
+            GalleryViewEvent.viewer_id.in_(client_ids),
+        )
+        .group_by(GalleryViewEvent.viewer_id)
+    ).all()
+
+    views_by_client: dict = {str(row[0]): row[1] for row in view_rows}
+
     items = [
         ClientStatsRead(
             client_id=str(cid),
-            total_views=0,  # per-viewer tracking not yet available
+            total_views=views_by_client.get(str(cid), 0),
             total_downloads=downloads_by_client.get(str(cid), 0),
             assigned_gallery_ids=galleries_by_client.get(str(cid), [])
         )
@@ -228,8 +243,27 @@ def get_analytics(
         if 0 <= month_diff < 6:
             clients_by_month[5 - month_diff] += 1
 
+    # 4. Views (Last 7 Days)
+    view_rows = db.execute(
+        select(GalleryViewEvent.viewed_at)
+        .where(GalleryViewEvent.owner_id == current_user.id, GalleryViewEvent.viewed_at >= seven_days_ago)
+    ).scalars().all()
+
+    views_by_day = [0] * 7
+    for dt in view_rows:
+        day_diff = (now.date() - dt.date()).days
+        if 0 <= day_diff < 7:
+            views_by_day[6 - day_diff] += 1
+
     return DashboardAnalyticsRead(
         series=[
+            AnalyticsSeriesRead(
+                title="Gallery Views",
+                subtitle="Last 7 Days",
+                values=views_by_day,
+                gradient=[0xFF7C5CFF, 0xFFA855F7],
+                isBar=True
+            ),
             AnalyticsSeriesRead(
                 title="Uploads",
                 subtitle="Last 7 Days",

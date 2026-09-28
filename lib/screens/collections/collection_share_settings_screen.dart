@@ -17,6 +17,7 @@ import '../../providers/studio_client_connections_provider.dart';
 import '../../widgets/buttons/gradient_button.dart';
 import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/inputs/custom_text_field.dart';
+import '../../core/theme/theme_context.dart';
 
 enum ShareMode { public, client, private }
 
@@ -350,7 +351,7 @@ class _CollectionShareSettingsScreenState extends ConsumerState<CollectionShareS
                               ),
                               if (hasActiveLink) ...[
                                 SizedBox(height: AppSpacing.xxl),
-                                const Divider(color: AppColors.border),
+                                Divider(color: context.borderColor),
                                 SizedBox(height: AppSpacing.lg),
                                 _buildSectionHeader(
                                     context, 'Active Share Link'),
@@ -399,9 +400,9 @@ class _CollectionShareSettingsScreenState extends ConsumerState<CollectionShareS
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.borderColor),
       ),
       child: Column(
         children: [
@@ -521,9 +522,9 @@ class _CollectionShareSettingsScreenState extends ConsumerState<CollectionShareS
     return Container(
       padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.borderColor),
       ),
       child: Column(
         children: [
@@ -646,9 +647,9 @@ class _CollectionShareSettingsScreenState extends ConsumerState<CollectionShareS
     return Container(
       padding: EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -737,9 +738,9 @@ class _CollectionShareSettingsScreenState extends ConsumerState<CollectionShareS
     return Container(
       padding: EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.borderColor),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -776,8 +777,8 @@ class _CollectionShareSettingsScreenState extends ConsumerState<CollectionShareS
               Container(
                 padding: EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: AppColors.border),
+                  color: Colors.white, // QR needs a white quiet zone
+                  border: Border.all(color: context.borderColor),
                   borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
                 child: QrImageView(

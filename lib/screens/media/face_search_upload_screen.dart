@@ -8,6 +8,7 @@ import '../../core/routes/app_routes.dart';
 import '../../core/theme/app_theme.dart';
 import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/empty_state_card.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Step 2 — Upload flow UI for Face Search.
 ///
@@ -111,9 +112,9 @@ class _FaceSearchUploadScreenState extends State<FaceSearchUploadScreen> {
     return Container(
       padding: EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -177,7 +178,7 @@ class _FaceSearchUploadScreenState extends State<FaceSearchUploadScreen> {
             icon: Icon(Icons.camera_alt_rounded),
             label: Text('Capture from Camera'),
             style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: AppColors.border),
+              side: BorderSide(color: context.borderColor),
             ),
           ),
           SizedBox(height: AppSpacing.lg),
@@ -202,7 +203,7 @@ class _FaceSearchUploadScreenState extends State<FaceSearchUploadScreen> {
           icon: Icon(Icons.swap_horiz_rounded),
           label: Text('Replace image'),
           style: OutlinedButton.styleFrom(
-            side: const BorderSide(color: AppColors.border),
+            side: BorderSide(color: context.borderColor),
           ),
         ),
         SizedBox(height: AppSpacing.md),
@@ -211,7 +212,7 @@ class _FaceSearchUploadScreenState extends State<FaceSearchUploadScreen> {
           icon: Icon(Icons.delete_outline_rounded),
           label: Text('Remove'),
           style: OutlinedButton.styleFrom(
-            side: const BorderSide(color: AppColors.border),
+            side: BorderSide(color: context.borderColor),
           ),
         ),
       ],

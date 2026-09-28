@@ -28,7 +28,26 @@ class FolderListScreen extends ConsumerStatefulWidget {
   ConsumerState<FolderListScreen> createState() => _FolderListScreenState();
 }
 
-class _FolderListScreenState extends ConsumerState<FolderListScreen> {
+class _FolderListScreenState extends ConsumerState<FolderListScreen>
+    with RouteAware {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) routeObserver.subscribe(this, route);
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    _refresh();
+  }
+
   @override
   void initState() {
     super.initState();

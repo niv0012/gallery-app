@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
 import '../common/anchored_dropdown_field.dart';
+import '../../core/theme/theme_context.dart';
 
 class AlbumsListControls extends StatelessWidget {
   const AlbumsListControls({
@@ -141,9 +142,9 @@ class GlassIconButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.primary.withValues(alpha: 0.08),
           shape: BoxShape.circle,
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: context.borderColor),
         ),
-        child: Icon(icon, size: 20, color: AppColors.text),
+        child: Icon(icon, size: 20, color: context.textPrimary),
       ),
     );
   }

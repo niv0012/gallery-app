@@ -4,6 +4,7 @@ import '../../core/api/admin_api_client.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Detail view for a single Studio or Client account.
 ///
@@ -98,14 +99,14 @@ class _SuperAdminUserDetailScreenState extends State<SuperAdminUserDetailScreen>
         Navigator.of(context).pop(_changed);
       },
       child: Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.bgColor,
         elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.text),
+        iconTheme: IconThemeData(color: context.textPrimary),
         title: Text(isStudio ? 'Studio account' : 'Client account',
-            style: const TextStyle(
-                color: AppColors.text, fontWeight: FontWeight.w700, fontSize: 18)),
+            style: TextStyle(
+                color: context.textPrimary, fontWeight: FontWeight.w700, fontSize: 18)),
       ),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.md),
@@ -210,7 +211,7 @@ class _SuperAdminUserDetailScreenState extends State<SuperAdminUserDetailScreen>
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     side: BorderSide(
-                        color: user.isActive ? AppColors.border : AppColors.secondary),
+                        color: user.isActive ? context.borderColor : AppColors.secondary),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(AppRadius.sm)),
                   ),
@@ -249,16 +250,16 @@ class _InfoCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.surfaceElevated,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title,
-              style: const TextStyle(
-                  fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.text)),
+              style: TextStyle(
+                  fontWeight: FontWeight.w700, fontSize: 14, color: context.textPrimary)),
           const SizedBox(height: 8),
           ...rows,
         ],
@@ -281,12 +282,12 @@ class _InfoRow extends StatelessWidget {
           SizedBox(
             width: 110,
             child: Text(label,
-                style: const TextStyle(fontSize: 12.5, color: AppColors.subtitle)),
+                style: TextStyle(fontSize: 12.5, color: context.textMuted)),
           ),
           Expanded(
             child: Text(value,
-                style: const TextStyle(
-                    fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.text)),
+                style: TextStyle(
+                    fontSize: 12.5, fontWeight: FontWeight.w600, color: context.textPrimary)),
           ),
         ],
       ),

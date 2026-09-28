@@ -8,6 +8,7 @@ import '../../../providers/settings_provider.dart';
 import '../../../widgets/common/custom_app_bar.dart';
 import '../../../widgets/inputs/custom_text_field.dart';
 import '../../../services/media_picker_service.dart';
+import '../../../core/theme/theme_context.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
@@ -146,7 +147,7 @@ class _ProfilePhotoTile extends StatelessWidget {
         color: Theme.of(context).brightness == Brightness.dark
             ? AppColors.darkSurface
             : Colors.white,
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.borderColor),
         borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
       child: Row(

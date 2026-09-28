@@ -13,6 +13,7 @@ import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/screen_backdrop.dart';
 import '../../widgets/inputs/cascading_location_picker.dart';
 import '../../widgets/inputs/custom_text_field.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Specializations a Studio can tag themselves with — shown as selectable
 /// chips on step "Studio business details" (photographer role only).
@@ -211,7 +212,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen> {
                                   decoration: BoxDecoration(
                                     color: Colors.white,
                                     shape: BoxShape.circle,
-                                    border: Border.all(color: AppColors.border),
+                                    border: Border.all(color: context.borderColor),
                                     boxShadow: [
                                       BoxShadow(
                                           color: AppColors.primary
@@ -296,7 +297,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen> {
                               labelStyle: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 13,
-                                color: selected ? Colors.white : AppColors.text,
+                                color: selected ? Colors.white : context.textPrimary,
                               ),
                               backgroundColor:
                                   Colors.white.withValues(alpha: 0.7),
@@ -304,7 +305,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen> {
                               side: BorderSide(
                                   color: selected
                                       ? AppColors.primary
-                                      : AppColors.border),
+                                      : context.borderColor),
                               shape: RoundedRectangleBorder(
                                   borderRadius:
                                       BorderRadius.circular(AppRadius.pill)),

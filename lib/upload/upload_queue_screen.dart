@@ -13,6 +13,7 @@ import 'picked_file_info.dart';
 import 'upload_job_model.dart';
 import 'upload_queue_provider.dart';
 import 'upload_queue_state.dart';
+import 'widgets/dismissible_upload_tile.dart';
 import 'widgets/upload_queue_tile.dart';
 import '../widgets/common/anchored_dropdown_field.dart';
 import '../widgets/common/pinch_zoom_handler.dart';
@@ -274,7 +275,7 @@ class _UploadQueueScreenState extends ConsumerState<UploadQueueScreen> {
                               // state holds a plain PickedFileInfo. For large
                               // web files (>10 MB, i.e. videos) we use a stream
                               // factory instead of loading all bytes into RAM.
-                              const _webStreamThreshold =
+                              const webStreamThreshold =
                                   10 * 1024 * 1024; // 10 MB
                               final picked = <PickedFileInfo>[];
                               for (final f in rawFiles) {
@@ -283,7 +284,7 @@ class _UploadQueueScreenState extends ConsumerState<UploadQueueScreen> {
                                 Stream<Uint8List> Function()? streamFactory;
                                 String? webBlobUrl;
                                 if (kIsWeb) {
-                                  if (size > _webStreamThreshold) {
+                                  if (size > webStreamThreshold) {
                                     // Large file: use streaming to avoid OOM
                                     streamFactory = f.readAsByteStream;
                                     webBlobUrl = f.xFile.path;
@@ -983,7 +984,11 @@ class _UploadQueueScreenState extends ConsumerState<UploadQueueScreen> {
                   itemCount: state.jobs.length,
                   itemBuilder: (context, i) {
                     final job = state.jobs[i];
-                    return UploadQueueTile(
+                    return DismissibleUploadTile(
+                      job: job,
+                      onRemove: () => notifier.removeJob(job.id),
+                      onRestore: () => notifier.restoreJob(job),
+                      child: UploadQueueTile(
                       job: job,
                       speedBytesPerSecond: state.speedBytesPerSecond,
                       remainingTime: state.remainingTime,
@@ -991,6 +996,7 @@ class _UploadQueueScreenState extends ConsumerState<UploadQueueScreen> {
                       onPause: () => notifier.pauseJob(job.id),
                       onResume: () => notifier.resumeJob(job.id),
                       onRetry: () => notifier.retryJob(job.id),
+                    ),
                     );
                   },
                 ),
@@ -1285,12 +1291,9 @@ class _UploadQueueScreenState extends ConsumerState<UploadQueueScreen> {
 /// A simple video player widget to generate a thumbnail for picked videos on Web and Mobile.
 class _LocalVideoThumbnail extends StatefulWidget {
   final String url;
-  final BoxFit fit;
 
   const _LocalVideoThumbnail({
-    super.key,
     required this.url,
-    this.fit = BoxFit.cover,
   });
 
   @override
@@ -1359,7 +1362,7 @@ class _LocalVideoThumbnailState extends State<_LocalVideoThumbnail> {
     return IgnorePointer(
       child: SizedBox.expand(
         child: FittedBox(
-          fit: widget.fit,
+          fit: BoxFit.cover,
           child: SizedBox(
             width: _controller.value.size.width,
             height: _controller.value.size.height,

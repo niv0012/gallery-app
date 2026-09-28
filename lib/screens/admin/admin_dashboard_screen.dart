@@ -42,8 +42,27 @@ class StudioDashboardScreen extends ConsumerStatefulWidget {
       _StudioDashboardScreenState();
 }
 
-class _StudioDashboardScreenState extends ConsumerState<StudioDashboardScreen> {
+class _StudioDashboardScreenState extends ConsumerState<StudioDashboardScreen>
+    with RouteAware {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) routeObserver.subscribe(this, route);
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    ref.read(adminDashboardProvider.notifier).refresh();
+  }
 
   void _toast(String message, {Color? color}) {
     if (!mounted) return;

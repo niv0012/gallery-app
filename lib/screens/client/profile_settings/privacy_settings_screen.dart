@@ -11,6 +11,7 @@ import '../../../providers/settings_provider.dart';
 import '../../../providers/user_providers.dart';
 import '../../../widgets/common/app_toast.dart';
 import '../../../widgets/common/custom_app_bar.dart';
+import '../../../core/theme/theme_context.dart';
 
 class PrivacySettingsScreen extends ConsumerStatefulWidget {
   const PrivacySettingsScreen({super.key});
@@ -185,7 +186,7 @@ class _ToggleTile extends StatelessWidget {
         color: Theme.of(context).brightness == Brightness.dark
             ? AppColors.darkSurface
             : Colors.white,
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.borderColor),
         borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
       child: Row(
@@ -196,7 +197,7 @@ class _ToggleTile extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.primary.withValues(alpha: 0.10),
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: context.borderColor),
             ),
             child: Icon(icon, color: AppColors.primary),
           ),
@@ -249,7 +250,7 @@ class _TapTile extends StatelessWidget {
         child: Container(
           padding: EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: context.borderColor),
             borderRadius: BorderRadius.circular(AppRadius.lg),
           ),
           child: Row(
@@ -260,7 +261,7 @@ class _TapTile extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.10),
                   shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.border),
+                  border: Border.all(color: context.borderColor),
                 ),
                 child: Icon(icon, color: AppColors.primary),
               ),

@@ -16,6 +16,7 @@ import '../../widgets/common/inline_error_banner.dart';
 import '../../widgets/common/loading_widget.dart';
 import 'main_nav_screen.dart';
 import '../../widgets/common/anchored_dropdown_field.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Client-facing subset of `AlbumsListScreen`'s `AlbumSortOption` — same
 /// Recent/Name axes, plus `mostMedia` standing in for that screen's
@@ -460,7 +461,7 @@ class _StudioChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? AppColors.primary : Colors.white,
+      color: selected ? AppColors.primary : context.surfaceColor,
       borderRadius: BorderRadius.circular(AppRadius.pill),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -471,7 +472,7 @@ class _StudioChip extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadius.pill),
             border: Border.all(
-              color: selected ? AppColors.primary : AppColors.border,
+              color: selected ? AppColors.primary : context.borderColor,
             ),
           ),
           child: Text(

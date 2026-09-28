@@ -11,6 +11,7 @@ import '../../widgets/admin/search_result_tile.dart';
 import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/empty_state_card.dart';
 import 'search_results_screen.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Global Search — searches Albums, Photos, Videos and Folders in one
 /// place. Fully self-contained: query + filter live as local state,
@@ -164,7 +165,7 @@ class _SearchField extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.8),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.borderColor),
       ),
       child: Row(
         children: [
@@ -283,8 +284,8 @@ class _SearchLanding extends StatelessWidget {
                     color: (Theme.of(context).brightness == Brightness.dark
                         ? AppColors.subtitleOnDark
                         : AppColors.subtitle)),
-                backgroundColor: Colors.white,
-                side: const BorderSide(color: AppColors.border),
+                backgroundColor: context.surfaceColor,
+                side: BorderSide(color: context.borderColor),
                 onPressed: () => onTapTerm(term),
                 onDeleted: () => onRemoveTerm(term),
                 deleteIconColor:

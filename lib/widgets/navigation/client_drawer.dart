@@ -264,7 +264,6 @@ class ClientDrawer extends ConsumerWidget {
                   icon: Icons.link_rounded,
                   label: 'Connected Studios',
                   selected: false,
-                  badgeCount: connectedStudioCount,
                   onTap: () {
                     Navigator.of(context).pop();
                     onNavigateToTab(

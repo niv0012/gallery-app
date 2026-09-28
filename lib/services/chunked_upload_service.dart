@@ -51,8 +51,8 @@ class ChunkedUploadService {
           'filename': fileName,
           'total_parts': totalParts,
         });
-        uploadId = existingUploadId!;
-        mediaId = existingMediaId!;
+        uploadId = existingUploadId;
+        mediaId = existingMediaId;
         partUrls = (resumeRes['part_urls'] as List<dynamic>?)?.cast<String>();
 
         final remoteUploadedParts =
@@ -140,8 +140,8 @@ class ChunkedUploadService {
           onSendProgress?.call(totalSent + currentInFlightBytes, fileSize);
         }
 
-        if (partUrls != null && partUrls!.isNotEmpty) {
-          final partUrl = partUrls![i];
+        if (partUrls != null && partUrls.isNotEmpty) {
+          final partUrl = partUrls[i];
           final res = await directUploadDio.put(
             partUrl,
             data: file.openRead(start, end),

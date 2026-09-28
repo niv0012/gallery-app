@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/theme_context.dart';
 
 /// Shared visual layout for every onboarding page: a large gradient hero
 /// icon tile, headline and supporting copy. Kept in one place so Pages
@@ -70,7 +71,7 @@ class OnboardingPageContent extends StatelessWidget {
                     style: Theme.of(context)
                         .textTheme
                         .bodyLarge
-                        ?.copyWith(color: AppColors.subtitle),
+                        ?.copyWith(color: context.textMuted),
                   ),
                 ],
               ),

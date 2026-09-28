@@ -8,6 +8,7 @@ import '../../models/admin_dashboard_data.dart';
 import '../../providers/admin_dashboard_providers.dart';
 import '../../providers/auth_providers.dart';
 import '../../providers/settings_provider.dart';
+import '../../services/studio_logo_actions.dart';
 
 /// Gradient (purple → pink) header for [StudioDrawer].
 ///
@@ -15,14 +16,111 @@ import '../../providers/settings_provider.dart';
 /// Studio Settings (so it never drifts out of sync), and the storage stat
 /// from the live [adminDashboardProvider] snapshot already powering the
 /// dashboard — nothing here is hardcoded.
-class StudioDrawerHeader extends ConsumerWidget {
+class StudioDrawerHeader extends ConsumerStatefulWidget {
   const StudioDrawerHeader({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<StudioDrawerHeader> createState() =>
+      _StudioDrawerHeaderState();
+}
+
+enum _LogoAction { change, remove }
+
+class _StudioDrawerHeaderState extends ConsumerState<StudioDrawerHeader> {
+  bool _updatingLogo = false;
+
+  /// Tap on the logo: bottom sheet with Add/Change and (if a logo exists)
+  /// Remove.
+  Future<void> _onLogoTap(bool hasLogo) async {
+    if (_updatingLogo) return;
+    final action = await showModalBottomSheet<_LogoAction>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded),
+              title: Text(hasLogo ? 'Change logo' : 'Add logo'),
+              onTap: () => Navigator.of(ctx).pop(_LogoAction.change),
+            ),
+            if (hasLogo)
+              ListTile(
+                leading: const Icon(Icons.delete_outline_rounded,
+                    color: AppColors.error),
+                title: const Text('Remove logo',
+                    style: TextStyle(color: AppColors.error)),
+                onTap: () => Navigator.of(ctx).pop(_LogoAction.remove),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (action == null || !mounted) return;
+
+    if (action == _LogoAction.remove) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Remove logo?'),
+          content: const Text(
+              'Your studio will go back to the default camera icon.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style:
+                  FilledButton.styleFrom(backgroundColor: AppColors.error),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Remove'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+    await _runLogoAction(action);
+  }
+
+  Future<void> _runLogoAction(_LogoAction action) async {
+    // Grab these before any await: the drawer may be closed mid-upload.
+    final container = ProviderScope.containerOf(context, listen: false);
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _updatingLogo = true);
+    try {
+      if (action == _LogoAction.remove) {
+        await StudioLogoActions.remove(container);
+        messenger.showSnackBar(
+            const SnackBar(content: Text('Studio logo removed.')));
+      } else {
+        final url = await StudioLogoActions.pickAndUpload(container);
+        if (url != null) {
+          messenger.showSnackBar(
+              const SnackBar(content: Text('Studio logo updated.')));
+        }
+      }
+    } catch (_) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(action == _LogoAction.remove
+            ? "Couldn't remove the logo. Please try again."
+            : "Couldn't update the logo. Please try again."),
+        backgroundColor: AppColors.error,
+      ));
+    } finally {
+      if (mounted) setState(() => _updatingLogo = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
     final snapshot = ref.watch(adminDashboardProvider).value;
     final authUser = ref.watch(authStateProvider).user;
+    final logoUrl = authUser?.avatarUrl;
+    final hasLogo = logoUrl != null && logoUrl.isNotEmpty;
 
     // Use the real logged-in user's profile as the primary source so the
     // hardcoded SettingsModel defaults ("Naman Shrivastava") never show up.
@@ -64,16 +162,10 @@ class StudioDrawerHeader extends ConsumerWidget {
           // Studio logo/icon + studio name.
           Row(
             children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.22),
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                ),
-                alignment: Alignment.center,
-                child: const Icon(Icons.camera_alt_rounded,
-                    color: Colors.white, size: 18),
+              _LogoBadge(
+                logoUrl: hasLogo ? logoUrl : null,
+                updating: _updatingLogo,
+                onTap: () => _onLogoTap(hasLogo),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -177,6 +269,94 @@ class StudioDrawerHeader extends ConsumerWidget {
       usedLabel: usedLabel,
       totalLabel: '',
       percent: percent,
+    );
+  }
+}
+
+/// The studio logo in the drawer header: shows [logoUrl] when set (camera
+/// icon otherwise), a spinner while uploading, and a small camera badge that
+/// signals it is tappable.
+class _LogoBadge extends StatelessWidget {
+  const _LogoBadge({
+    required this.logoUrl,
+    required this.updating,
+    required this.onTap,
+  });
+
+  final String? logoUrl;
+  final bool updating;
+  final VoidCallback onTap;
+
+  static const double _size = 44;
+
+  @override
+  Widget build(BuildContext context) {
+    const fallback = Icon(Icons.camera_alt_rounded,
+        color: Colors.white, size: 20);
+
+    return Semantics(
+      button: true,
+      label: 'Studio logo. Tap to change or remove.',
+      child: GestureDetector(
+        onTap: updating ? null : onTap,
+        child: SizedBox(
+          width: _size,
+          height: _size,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: Container(
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.22),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                  ),
+                  alignment: Alignment.center,
+                  child: logoUrl == null
+                      ? fallback
+                      : Image.network(
+                          logoUrl!,
+                          width: _size,
+                          height: _size,
+                          fit: BoxFit.cover,
+                          cacheWidth: (_size * 3).round(),
+                          errorBuilder: (_, __, ___) => fallback,
+                        ),
+                ),
+              ),
+              if (updating)
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                    ),
+                    alignment: Alignment.center,
+                    child: const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    ),
+                  ),
+                ),
+              Positioned(
+                right: -4,
+                bottom: -4,
+                child: Container(
+                  width: 18,
+                  height: 18,
+                  decoration: const BoxDecoration(
+                      color: Colors.white, shape: BoxShape.circle),
+                  child: const Icon(Icons.camera_alt_rounded,
+                      size: 11, color: AppColors.primary),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

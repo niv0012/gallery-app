@@ -5,6 +5,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/folder_provider.dart';
 import '../../widgets/common/custom_app_bar.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Admin-only Folder Settings — reached from [FolderDetailsScreen].
 /// Houses folder-level toggles and the destructive delete action.
@@ -71,9 +72,9 @@ class FolderSettingsScreen extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.md, vertical: AppSpacing.sm),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.surfaceColor,
                 borderRadius: BorderRadius.circular(AppRadius.lg),
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: context.borderColor),
               ),
               child: SwitchListTile(
                 contentPadding: EdgeInsets.zero,
@@ -87,9 +88,9 @@ class FolderSettingsScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: AppSpacing.xl),
-            const Text('Danger zone',
+            Text('Danger zone',
                 style: TextStyle(
-                    fontWeight: FontWeight.w800, color: AppColors.text)),
+                    fontWeight: FontWeight.w800, color: context.textPrimary)),
             const SizedBox(height: AppSpacing.sm),
             SizedBox(
               width: double.infinity,

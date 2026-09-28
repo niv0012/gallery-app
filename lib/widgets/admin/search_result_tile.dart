@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_constants.dart';
-import '../../core/theme/app_theme.dart';
 import '../../models/search_data.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Single row in Global Search results — same gradient icon-badge +
 /// title/subtitle language as [NotificationTile] and [RecentClientTile],
@@ -23,9 +23,9 @@ class SearchResultTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: context.borderColor),
         ),
         child: Row(
           children: [
@@ -49,18 +49,18 @@ class SearchResultTile extends StatelessWidget {
                   Text(data.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 13.5,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.text)),
+                          color: context.textPrimary)),
                   const SizedBox(height: 2),
                   Text(data.subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
-                          color: AppColors.subtitle)),
+                          color: context.textMuted)),
                 ],
               ),
             ),

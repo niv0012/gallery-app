@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../upload_job_model.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/theme_context.dart';
 
 /// A premium, highly detailed list tile for an upload job in the queue.
 ///
@@ -79,7 +80,7 @@ class UploadQueueTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final statusColor = switch (job.status) {
-      UploadJobStatus.queued => AppColors.subtitle,
+      UploadJobStatus.queued => context.textMuted,
       UploadJobStatus.uploading => AppColors.primary,
       UploadJobStatus.paused => Colors.orange.shade700,
       UploadJobStatus.completed => AppColors.success,
@@ -88,7 +89,7 @@ class UploadQueueTile extends StatelessWidget {
     };
 
     final statusBg = switch (job.status) {
-      UploadJobStatus.queued => AppColors.subtitle.withValues(alpha: 0.08),
+      UploadJobStatus.queued => context.textMuted.withValues(alpha: 0.08),
       UploadJobStatus.uploading => AppColors.primary.withValues(alpha: 0.2),
       UploadJobStatus.paused => Colors.orange.withValues(alpha: 0.2),
       UploadJobStatus.completed => AppColors.success.withValues(alpha: 0.2),
@@ -108,7 +109,7 @@ class UploadQueueTile extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(

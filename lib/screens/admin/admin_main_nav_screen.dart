@@ -5,6 +5,7 @@ import '../../core/routes/app_routes.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/user.dart';
 import '../../providers/auth_providers.dart';
+import '../../providers/drawer_provider.dart';
 import '../../upload/upload_job_model.dart';
 import '../../upload/upload_queue_provider.dart';
 import '../../widgets/common/screen_backdrop.dart';
@@ -14,6 +15,7 @@ import 'admin_clients_screen.dart';
 import 'admin_dashboard_screen.dart';
 import 'admin_gallery_screen.dart';
 import 'admin_profile_screen.dart';
+import '../../core/theme/theme_context.dart';
 
 /// The single post-login Scaffold for the Photographer / Studio Owner role.
 ///
@@ -29,7 +31,13 @@ class AdminMainNavScreen extends ConsumerStatefulWidget {
 class _AdminMainNavScreenState extends ConsumerState<AdminMainNavScreen> {
   int _navIndex = 0;
 
-  void _goToTab(int index) => setState(() => _navIndex = index);
+  void _goToTab(int index) {
+    setState(() => _navIndex = index);
+    // Keep the drawer highlight in sync with the bottom nav.
+    const ids = {0: 'dashboard', 1: 'gallery', 2: 'clients'};
+    final id = ids[index];
+    if (id != null) ref.read(selectedDrawerItemProvider.notifier).select(id);
+  }
 
   late final _tabs = [
     StudioDashboardScreen(onNavigateToTab: _goToTab),
@@ -113,7 +121,7 @@ class BackgroundUploadIndicator extends ConsumerWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: Colors.black.withValues(alpha: 0.04)),
-                color: Colors.white.withValues(alpha: 0.96),
+                color: context.surfaceColor.withValues(alpha: 0.96),
               ),
               child: Row(
                 children: [
@@ -151,7 +159,7 @@ class BackgroundUploadIndicator extends ConsumerWidget {
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w800,
-                                color: Colors.black87,
+                                color: context.textPrimary,
                               ),
                             ),
                             Text(

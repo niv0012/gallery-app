@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
 import '../buttons/gradient_button.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Themed modal popup used in place of the default (plain, full-width,
 /// dark) Material [SnackBar] for auth-flow messages — e.g. the "you
@@ -56,7 +57,7 @@ class AppPopup extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(
             AppSpacing.lg, AppSpacing.xl, AppSpacing.lg, AppSpacing.lg),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(AppRadius.lg),
           boxShadow: [
             BoxShadow(

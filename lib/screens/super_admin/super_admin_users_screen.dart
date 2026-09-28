@@ -8,6 +8,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/csv_utils.dart';
 import '../../core/utils/format_utils.dart';
 import 'super_admin_user_detail_screen.dart';
+import '../../core/theme/theme_context.dart';
 
 class _UsersScreenData {
   final PlatformUsers users;
@@ -212,14 +213,14 @@ class _SuperAdminUsersScreenState extends State<SuperAdminUsersScreen>
         final hasSuspended = selectedUsers.any((u) => !u.isActive);
 
         return Scaffold(
-          backgroundColor: AppColors.background,
+          backgroundColor: context.bgColor,
           appBar: AppBar(
-            backgroundColor: AppColors.background,
+            backgroundColor: context.bgColor,
             elevation: 0,
-            iconTheme: const IconThemeData(color: AppColors.text),
+            iconTheme: IconThemeData(color: context.textPrimary),
             title: Text(_title,
-                style: const TextStyle(
-                    color: AppColors.text, fontWeight: FontWeight.w700, fontSize: 18)),
+                style: TextStyle(
+                    color: context.textPrimary, fontWeight: FontWeight.w700, fontSize: 18)),
             actions: [
               if (_selectMode)
                 TextButton(
@@ -234,7 +235,7 @@ class _SuperAdminUsersScreenState extends State<SuperAdminUsersScreen>
                 )
               else if (currentTabHasUsers && !isLoading && !hasError)
                 IconButton(
-                  icon: const Icon(Icons.checklist_rounded, color: AppColors.text),
+                  icon: Icon(Icons.checklist_rounded, color: context.textPrimary),
                   tooltip: 'Select mode',
                   onPressed: () => setState(() {
                     _selectMode = true;
@@ -244,7 +245,7 @@ class _SuperAdminUsersScreenState extends State<SuperAdminUsersScreen>
             bottom: TabBar(
               controller: _tabController,
               labelColor: AppColors.primary,
-              unselectedLabelColor: AppColors.subtitle,
+              unselectedLabelColor: context.textMuted,
               indicatorColor: AppColors.primary,
               labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
               tabs: const [
@@ -259,8 +260,8 @@ class _SuperAdminUsersScreenState extends State<SuperAdminUsersScreen>
                     padding: const EdgeInsets.symmetric(
                         horizontal: AppSpacing.md, vertical: 10),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceElevated,
-                      border: const Border(top: BorderSide(color: AppColors.border)),
+                      color: context.surfaceColor,
+                      border: Border(top: BorderSide(color: context.borderColor)),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.05),
@@ -281,10 +282,10 @@ class _SuperAdminUsersScreenState extends State<SuperAdminUsersScreen>
                           children: [
                             Text(
                               '${_selectedIds.length} selected',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 14,
-                                color: AppColors.text,
+                                color: context.textPrimary,
                               ),
                             ),
                             const Spacer(),
@@ -305,7 +306,7 @@ class _SuperAdminUsersScreenState extends State<SuperAdminUsersScreen>
                                 side: BorderSide(
                                   color: hasActive
                                       ? AppColors.error
-                                      : AppColors.border,
+                                      : context.borderColor,
                                 ),
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 12, vertical: 8),
@@ -342,7 +343,7 @@ class _SuperAdminUsersScreenState extends State<SuperAdminUsersScreen>
                       AppSpacing.md, AppSpacing.sm, AppSpacing.md, 0),
                   child: Text(
                     _subtitle!,
-                    style: const TextStyle(fontSize: 12.5, color: AppColors.subtitle),
+                    style: TextStyle(fontSize: 12.5, color: context.textMuted),
                   ),
                 ),
               Padding(
@@ -358,18 +359,18 @@ class _SuperAdminUsersScreenState extends State<SuperAdminUsersScreen>
                         }),
                         decoration: InputDecoration(
                           hintText: 'Search by name or email',
-                          prefixIcon: const Icon(Icons.search_rounded,
-                              color: AppColors.subtitle),
+                          prefixIcon: Icon(Icons.search_rounded,
+                              color: context.textMuted),
                           filled: true,
-                          fillColor: AppColors.surfaceElevated,
+                          fillColor: context.surfaceColor,
                           contentPadding: const EdgeInsets.symmetric(vertical: 0),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(AppRadius.pill),
-                            borderSide: const BorderSide(color: AppColors.border),
+                            borderSide: BorderSide(color: context.borderColor),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(AppRadius.pill),
-                            borderSide: const BorderSide(color: AppColors.border),
+                            borderSide: BorderSide(color: context.borderColor),
                           ),
                         ),
                       ),
@@ -379,7 +380,7 @@ class _SuperAdminUsersScreenState extends State<SuperAdminUsersScreen>
                       icon: Icon(
                         Icons.sort_rounded,
                         color:
-                            _sortByStorage ? AppColors.primary : AppColors.subtitle,
+                            _sortByStorage ? AppColors.primary : context.textMuted,
                       ),
                       tooltip:
                           _sortByStorage ? 'Sorted by Storage' : 'Sort by Storage',
@@ -463,13 +464,13 @@ class _ErrorState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error_outline_rounded, color: AppColors.subtitle, size: 32),
+          Icon(Icons.error_outline_rounded, color: context.textMuted, size: 32),
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Text(message,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.subtitle)),
+                style: TextStyle(color: context.textMuted)),
           ),
           const SizedBox(height: 12),
           TextButton(onPressed: onRetry, child: const Text('Retry')),
@@ -616,14 +617,14 @@ class _UserTile extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
-          color: AppColors.surfaceElevated,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(
             color: isSelected
                 ? AppColors.primary
                 : suspended
                     ? AppColors.error.withValues(alpha: 0.4)
-                    : AppColors.border,
+                    : context.borderColor,
             width: isSelected ? 1.5 : 1.0,
           ),
         ),
@@ -690,8 +691,8 @@ class _UserTile extends StatelessWidget {
                       ),
                       Text(
                         '${isStudio ? (user.studioName ?? user.email) : user.email} • ${formatBytes(storageBytes)}',
-                        style: const TextStyle(
-                            fontSize: 11.5, color: AppColors.subtitle),
+                        style: TextStyle(
+                            fontSize: 11.5, color: context.textMuted),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -725,7 +726,7 @@ class _UserTile extends StatelessWidget {
                             color: user.subscriptionStatus.subscriptionColor)),
                   )
                 else
-                  const Icon(Icons.chevron_right_rounded, color: AppColors.subtitle),
+                  Icon(Icons.chevron_right_rounded, color: context.textMuted),
               ],
             ),
           ),
@@ -742,7 +743,7 @@ class _EmptyList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Text(label, style: const TextStyle(color: AppColors.subtitle)),
+      child: Text(label, style: TextStyle(color: context.textMuted)),
     );
   }
 }

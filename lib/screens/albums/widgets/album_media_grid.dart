@@ -1,7 +1,3 @@
-import 'dart:io';
-
-import 'package:flutter/foundation.dart' show kIsWeb;
-
 import 'package:flutter/material.dart';
 
 import '../../../widgets/common/pinch_zoom_handler.dart';
@@ -9,7 +5,8 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/media_format_utils.dart';
 import '../../../models/media_model.dart';
-import '../../../widgets/media/video_fallback_thumbnail.dart';
+import '../../../widgets/common/grid_columns_button.dart';
+import '../../../widgets/media/media_thumb.dart';
 import '../../../widgets/media/media_thumb_badges.dart';
 
 /// Responsive grid used by Album Details' "Recent Photos" section.
@@ -160,42 +157,64 @@ class _MediaGridViewState extends State<_MediaGridView> {
           _isInitialized = true;
         }
 
-        return PinchZoomHandler(
-          onZoomIn: _zoomIn,
-          onZoomOut: _zoomOut,
-          child: GestureDetector(
-            // onScaleStart/Update handles BOTH two-finger touch pinch AND
-            // trackpad pinch-to-zoom on Web/desktop natively in Flutter.
-            onScaleStart: (details) {
-              _scaleStartCrossAxisCount = _crossAxisCount.toDouble();
-            },
-            onScaleUpdate: (details) {
-              if (details.scale == 1.0) return;
-              final newCount = (_scaleStartCrossAxisCount / details.scale)
-                  .round()
-                  .clamp(1, 8);
-              if (newCount != _crossAxisCount) {
-                setState(() => _crossAxisCount = newCount);
-              }
-            },
-            child: GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: _crossAxisCount,
-                mainAxisSpacing: AppSpacing.sm,
-                crossAxisSpacing: AppSpacing.sm,
-                childAspectRatio: 1,
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: GridColumnsButton(
+                columns: _crossAxisCount,
+                options: const [1, 2, 3, 4, 6],
+                onChanged: (c) => setState(() => _crossAxisCount = c),
               ),
-              itemCount: widget.media.length,
-              itemBuilder: (context, i) {
-                final m = widget.media[i];
-                return _MediaThumb(media: m, onTap: () => widget.onTapMedia(m));
-              },
             ),
-          ),
+            _buildGrid(),
+          ],
         );
       },
+    );
+  }
+
+  Widget _buildGrid() {
+    return PinchZoomHandler(
+      onZoomIn: _zoomIn,
+      onZoomOut: _zoomOut,
+      child: GestureDetector(
+        // onScaleStart/Update handles BOTH two-finger touch pinch AND
+        // trackpad pinch-to-zoom on Web/desktop natively in Flutter.
+        onScaleStart: (details) {
+          _scaleStartCrossAxisCount = _crossAxisCount.toDouble();
+        },
+        onScaleUpdate: (details) {
+          if (details.scale == 1.0) return;
+          final newCount = (_scaleStartCrossAxisCount / details.scale)
+              .round()
+              .clamp(1, 8);
+          if (newCount != _crossAxisCount) {
+            setState(() => _crossAxisCount = newCount);
+          }
+        },
+        child: GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: _crossAxisCount,
+            mainAxisSpacing: AppSpacing.sm,
+            crossAxisSpacing: AppSpacing.sm,
+            childAspectRatio: 1,
+          ),
+          itemCount: widget.media.length,
+          itemBuilder: (context, i) {
+            final m = widget.media[i];
+            return _MediaThumb(
+              media: m,
+              cacheWidth: _crossAxisCount <= 2 ? 900 : 480,
+              onTap: () => widget.onTapMedia(m),
+            );
+          },
+        ),
+      ),
     );
   }
 }
@@ -203,8 +222,10 @@ class _MediaGridViewState extends State<_MediaGridView> {
 class _MediaThumb extends StatefulWidget {
   final MediaModel media;
   final VoidCallback onTap;
+  final int cacheWidth;
 
-  const _MediaThumb({required this.media, required this.onTap});
+  const _MediaThumb(
+      {required this.media, required this.onTap, this.cacheWidth = 480});
 
   @override
   State<_MediaThumb> createState() => _MediaThumbState();
@@ -239,55 +260,7 @@ class _MediaThumbState extends State<_MediaThumb>
           child: Stack(
             fit: StackFit.expand,
             children: [
-              if (m.displayPath.isNotEmpty || m.displayThumbnailPath.isNotEmpty)
-                Builder(
-                  builder: (context) {
-                    final path = isVideo || kIsWeb
-                        ? m.displayThumbnailPath
-                        : m.displayPath;
-                    final isNetwork = path.startsWith('http://') ||
-                        path.startsWith('https://');
-                    if (isNetwork) {
-                      return Image.network(
-                        path,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => isVideo
-                            ? VideoFallbackThumbnail(
-                                media: m, fit: BoxFit.cover)
-                            : _fallback(isVideo: isVideo),
-                      );
-                    } else if (!kIsWeb &&
-                        path.isNotEmpty &&
-                        File(path).existsSync()) {
-                      return Image.file(
-                        File(path),
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) =>
-                            _fallback(isVideo: isVideo),
-                      );
-                    }
-                    return isVideo
-                        ? VideoFallbackThumbnail(media: m, fit: BoxFit.cover)
-                        : _fallback(isVideo: isVideo);
-                  },
-                )
-              else
-                isVideo
-                    ? VideoFallbackThumbnail(media: m, fit: BoxFit.cover)
-                    : _fallback(isVideo: isVideo),
-              // Fallback play icon rendering is handled by VideoFallbackThumbnail if it kicks in.
-              // So we only render the overlay/icon/badge if we are NOT using the web fallback,
-              // or if the web fallback doesn't trigger (i.e. the image actually loaded).
-              // Wait, if Image.network succeeds, we STILL want the play icon.
-              // But VideoFallbackThumbnail renders its own play icon AND duration!
-              // To prevent double rendering, we can conditionally hide these if the image failed.
-              // However, the easiest way is to let the fallback handle it and just render it normally here
-              // when the thumbnail DOES load. Since VideoFallbackThumbnail is returned inside Builder,
-              // the outer Stack will render the play button on top of VideoFallbackThumbnail.
-              // VideoFallbackThumbnail already renders a play button! So there might be 2 play buttons.
-              // To fix this, we can remove the play button from VideoFallbackThumbnail? No, because it's used elsewhere.
-              // Let's just let it render on top, or we can check if it's network and kIsWeb.
-              // For simplicity, since the outer Stack draws on top, having two play buttons overlapping exactly is not a big deal.
+              MediaThumb(media: m, cacheWidth: widget.cacheWidth),
               if (isVideo)
                 DecoratedBox(
                   decoration: BoxDecoration(
@@ -340,23 +313,4 @@ class _MediaThumbState extends State<_MediaThumb>
     );
   }
 
-  Widget _fallback({required bool isVideo}) {
-    final m = widget.media;
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(m.gradientArgb.first), Color(m.gradientArgb[1])],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Center(
-        child: Icon(
-          isVideo ? Icons.videocam_rounded : Icons.image_rounded,
-          color: Colors.white.withValues(alpha: 0.92),
-          size: 26,
-        ),
-      ),
-    );
-  }
 }

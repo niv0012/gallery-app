@@ -16,6 +16,7 @@ import '../../widgets/common/loading_widget.dart';
 import '../../widgets/common/empty_state_card.dart';
 
 import '../../core/utils/app_exceptions.dart';
+import '../../core/theme/theme_context.dart';
 
 enum MediaBatchAction { move, copy }
 
@@ -492,7 +493,7 @@ class _MediaCopyMoveFlowScreenState
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.85),
                         borderRadius: BorderRadius.circular(AppRadius.lg),
-                        border: Border.all(color: AppColors.border),
+                        border: Border.all(color: context.borderColor),
                       ),
                       child: Column(
                         children: [

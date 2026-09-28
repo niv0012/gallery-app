@@ -6,6 +6,7 @@ import '../../core/theme/app_theme.dart';
 import '../../widgets/buttons/gradient_button.dart';
 import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/screen_backdrop.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Confirms an email was sent with a scale-in success badge, offers
 /// Resend Email (with a short cooldown feel via loading state) and a
@@ -91,7 +92,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                   style: Theme.of(context)
                       .textTheme
                       .bodyLarge
-                      ?.copyWith(color: AppColors.subtitle),
+                      ?.copyWith(color: context.textMuted),
                 ),
                 const SizedBox(height: AppSpacing.xxl),
                 GradientButton(

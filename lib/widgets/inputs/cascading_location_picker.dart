@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/constants/app_constants.dart';
 import '../../providers/location_providers.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Country → State → City cascading picker used on the Complete Profile
 /// and Edit Profile screens.
@@ -285,10 +286,10 @@ class _CascadingLocationPickerState
           const SizedBox(height: AppSpacing.sm),
           TextFormField(
             controller: _stateFallbackController,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'State / Province (type it)',
               prefixIcon: Icon(Icons.edit_location_alt_outlined,
-                  color: AppColors.subtitle, size: 20),
+                  color: context.textMuted, size: 20),
             ),
             onChanged: (_) => _emit(),
           ),
@@ -313,10 +314,10 @@ class _CascadingLocationPickerState
           const SizedBox(height: AppSpacing.sm),
           TextFormField(
             controller: _cityFallbackController,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'City (type it)',
               prefixIcon: Icon(Icons.edit_location_alt_outlined,
-                  color: AppColors.subtitle, size: 20),
+                  color: context.textMuted, size: 20),
             ),
             onChanged: (_) => _emit(),
           ),

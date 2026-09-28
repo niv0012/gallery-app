@@ -9,6 +9,7 @@ import '../../widgets/admin/search_filter_chips.dart';
 import '../../widgets/admin/search_result_tile.dart';
 import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/empty_state_card.dart';
+import '../../core/theme/theme_context.dart';
 
 /// Route arguments for [SearchResultsScreen] — the query/filter the
 /// person had active on [GlobalSearchScreen] when they asked to see the
@@ -128,7 +129,7 @@ class _SearchResultsScreenState extends ConsumerState<SearchResultsScreen> {
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.8),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: context.borderColor),
               ),
               child: Row(
                 children: [
@@ -298,9 +299,9 @@ class _ResultGridTile extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: context.borderColor),
           boxShadow: [
             BoxShadow(
                 color: AppColors.primary.withValues(alpha: 0.06),

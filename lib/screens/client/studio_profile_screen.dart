@@ -12,6 +12,7 @@ import '../../widgets/cards/glass_card.dart';
 import '../../widgets/common/inline_error_banner.dart';
 import '../../widgets/common/loading_widget.dart';
 import '../../widgets/common/safe_network_image.dart';
+import '../../core/theme/theme_context.dart';
 
 class StudioProfileScreen extends ConsumerStatefulWidget {
   final String studioId;
@@ -307,7 +308,7 @@ class _StudioProfileScreenState extends ConsumerState<StudioProfileScreen>
                       decoration: BoxDecoration(
                         border: Border(
                             bottom:
-                                BorderSide(color: AppColors.border, width: 1)),
+                                BorderSide(color: context.borderColor, width: 1)),
                       ),
                       child: TabBar(
                         controller: _tabController,
@@ -610,7 +611,7 @@ class _StudioProfileScreenState extends ConsumerState<StudioProfileScreen>
                   studio.email,
                   onTap: () => _launchUrl('mailto:${studio.email}'),
                 ),
-                const Divider(color: AppColors.border, height: 20),
+                Divider(color: context.borderColor, height: 20),
               ],
               if (studio.website.isNotEmpty) ...[
                 _buildContactRow(
@@ -623,7 +624,7 @@ class _StudioProfileScreenState extends ConsumerState<StudioProfileScreen>
                     _launchUrl(url);
                   },
                 ),
-                const Divider(color: AppColors.border, height: 20),
+                Divider(color: context.borderColor, height: 20),
               ],
               if (studio.instagramUrl.isNotEmpty) ...[
                 _buildContactRow(
@@ -632,7 +633,7 @@ class _StudioProfileScreenState extends ConsumerState<StudioProfileScreen>
                   studio.instagramUrl,
                   onTap: () => _launchUrl(studio.instagramUrl),
                 ),
-                const Divider(color: AppColors.border, height: 20),
+                Divider(color: context.borderColor, height: 20),
               ],
               if (studio.facebookUrl.isNotEmpty) ...[
                 _buildContactRow(
@@ -641,7 +642,7 @@ class _StudioProfileScreenState extends ConsumerState<StudioProfileScreen>
                   studio.facebookUrl,
                   onTap: () => _launchUrl(studio.facebookUrl),
                 ),
-                const Divider(color: AppColors.border, height: 20),
+                Divider(color: context.borderColor, height: 20),
               ],
               if (studio.youtubeUrl.isNotEmpty) ...[
                 _buildContactRow(
@@ -650,7 +651,7 @@ class _StudioProfileScreenState extends ConsumerState<StudioProfileScreen>
                   studio.youtubeUrl,
                   onTap: () => _launchUrl(studio.youtubeUrl),
                 ),
-                const Divider(color: AppColors.border, height: 20),
+                Divider(color: context.borderColor, height: 20),
               ],
               if (studio.pinterestUrl.isNotEmpty) ...[
                 _buildContactRow(
@@ -659,7 +660,7 @@ class _StudioProfileScreenState extends ConsumerState<StudioProfileScreen>
                   studio.pinterestUrl,
                   onTap: () => _launchUrl(studio.pinterestUrl),
                 ),
-                const Divider(color: AppColors.border, height: 20),
+                Divider(color: context.borderColor, height: 20),
               ],
               if (studio.email.isEmpty &&
                   studio.website.isEmpty &&
@@ -801,7 +802,7 @@ class _StudioProfileScreenState extends ConsumerState<StudioProfileScreen>
                   loadingBuilder: (context, child, loadingProgress) {
                     if (loadingProgress == null) return child;
                     return Container(
-                      color: AppColors.border.withValues(alpha: 0.5),
+                      color: context.borderColor.withValues(alpha: 0.5),
                       child: Center(
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),

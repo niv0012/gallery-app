@@ -27,13 +27,27 @@ class AlbumsListScreen extends ConsumerStatefulWidget {
   ConsumerState<AlbumsListScreen> createState() => _AlbumsListScreenState();
 }
 
-class _AlbumsListScreenState extends ConsumerState<AlbumsListScreen> {
+class _AlbumsListScreenState extends ConsumerState<AlbumsListScreen>
+    with RouteAware {
   final _searchController = TextEditingController();
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) routeObserver.subscribe(this, route);
+  }
+
+  @override
   void dispose() {
+    routeObserver.unsubscribe(this);
     _searchController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    ref.read(albumProvider).load();
   }
 
   @override
