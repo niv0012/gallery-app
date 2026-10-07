@@ -76,4 +76,67 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get logOut => 'लॉग आउट';
+
+  @override
+  String get folderExplorerMyFiles => 'मेरी फाइलें';
+
+  @override
+  String get folderExplorerManageFolders => 'फ़ोल्डर प्रबंधित करें';
+
+  @override
+  String get folderExplorerMenu => 'फ़ोल्डर एक्सप्लोरर मेनू';
+
+  @override
+  String get folderExplorerAllAlbums => 'सभी एल्बम';
+
+  @override
+  String get folderExplorerEmpty => 'यह फ़ोल्डर खाली है।';
+
+  @override
+  String get folderExplorerLoading => 'सामग्री लोड हो रही है…';
+
+  @override
+  String get folderExplorerGrid => 'ग्रिड';
+
+  @override
+  String get folderExplorerList => 'सूची';
+
+  @override
+  String get folderExplorerDetails => 'विवरण';
+
+  @override
+  String get folderExplorerSortByName => 'नाम';
+
+  @override
+  String get folderExplorerSortByDate => 'तारीख';
+
+  @override
+  String get folderExplorerSortByDateCreated => 'Date Created';
+
+  @override
+  String get folderExplorerSortBySize => 'आकार';
+
+  @override
+  String get folderExplorerAscending => 'आरोही';
+
+  @override
+  String get folderExplorerDescending => 'अवरोही';
+
+  @override
+  String get folderExplorerLooseMedia => 'ढीली मीडिया';
+
+  @override
+  String get folderExplorerFolders => 'फ़ोल्डर';
+
+  @override
+  String get folderExplorerType => 'प्रकार';
+
+  @override
+  String get folderExplorerItems => 'आइटम';
+
+  @override
+  String get uploadCompressLabel => 'अपलोड से पहले फ़ाइलों को संपीड़ित करें';
+
+  @override
+  String get uploadCompressSubtitle => 'तस्वीरों का आकार 2048 px और JPEG गुणवत्ता 85 पर किया जाता है। वीडियो संपीड़ित नहीं होते हैं।';
 }

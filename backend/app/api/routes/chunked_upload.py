@@ -240,11 +240,11 @@ def complete_chunked_upload(
     """
     if req.album_id is not None:
         album = db.get(Album, req.album_id)
-        if album is None or album.owner_id != current_user.id:
+        if album is None or album.owner_id != current_user.id or getattr(album, "deleted_at", None) is not None:
             raise HTTPException(status_code=404, detail="Album not found")
     if req.folder_id is not None:
         folder = db.get(Folder, req.folder_id)
-        if folder is None or folder.owner_id != current_user.id:
+        if folder is None or folder.owner_id != current_user.id or getattr(folder, "deleted_at", None) is not None:
             raise HTTPException(status_code=404, detail="Folder not found")
 
     try:

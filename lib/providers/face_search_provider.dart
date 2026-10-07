@@ -49,6 +49,10 @@ class FaceSearchState {
   final String? shareToken;
   final String? sharePassword;
 
+  /// Human-readable name of the folder/album being searched (shown on
+  /// the landing screen). Null means "entire library".
+  final String? scopeLabel;
+
   const FaceSearchState({
     this.mode = FaceSearchMode.myLibrary,
     this.selectedSelfie,
@@ -62,6 +66,7 @@ class FaceSearchState {
     this.folderIdFilter,
     this.shareToken,
     this.sharePassword,
+    this.scopeLabel,
   });
 
   bool get hasMultipleFaces => detectedFaces.length > 1;
@@ -81,6 +86,7 @@ class FaceSearchState {
     String? folderIdFilter,
     String? shareToken,
     String? sharePassword,
+    String? scopeLabel,
   }) {
     return FaceSearchState(
       mode: mode ?? this.mode,
@@ -97,6 +103,7 @@ class FaceSearchState {
       folderIdFilter: folderIdFilter ?? this.folderIdFilter,
       shareToken: shareToken ?? this.shareToken,
       sharePassword: sharePassword ?? this.sharePassword,
+      scopeLabel: scopeLabel ?? this.scopeLabel,
     );
   }
 }
@@ -116,26 +123,55 @@ class FaceSearchNotifier extends Notifier<FaceSearchState> {
   /// Scopes subsequent searches to the studio's own library, optionally
   /// filtered to one album/folder. Call this before [pickSelfie] for
   /// the in-app "search my gallery" flow.
-  void useMyLibrary({String? albumId, String? folderId}) {
-    state = state.copyWith(
+  ///
+  /// Always starts from a CLEAN state. [FaceSearchState.copyWith] can't
+  /// set a field back to null (`null ?? this.x` keeps the old value), so
+  /// the old implementation let a previous folder/album scope leak into
+  /// the global search — tapping the global icon after a folder search
+  /// silently kept searching only that folder.
+  void useMyLibrary({String? albumId, String? folderId, String? scopeLabel}) {
+    widenedFrom = null;
+    state = FaceSearchState(
       mode: FaceSearchMode.myLibrary,
       albumIdFilter: albumId,
       folderIdFilter: folderId,
+      scopeLabel: scopeLabel,
     );
   }
 
   /// Scopes subsequent searches to all active shared albums for the logged-in client.
   void useClientGallery() {
-    state = state.copyWith(
-      mode: FaceSearchMode.clientGallery,
-    );
+    // Fresh state so a stale studio folder/album scope or share token
+    // from an earlier search can never leak into this one.
+    state = const FaceSearchState(mode: FaceSearchMode.clientGallery);
   }
+
+  /// Widens a folder/album-scoped search to the studio's whole library
+  /// (used by the scope switcher on the landing screen).
+  void useEntireLibrary() {
+    final s = state;
+    final remembered = (s.albumIdFilter != null || s.folderIdFilter != null)
+        ? (
+            albumId: s.albumIdFilter,
+            folderId: s.folderIdFilter,
+            label: s.scopeLabel,
+          )
+        : widenedFrom;
+    useMyLibrary();
+    // Remember where we came from so the landing screen can flip back.
+    widenedFrom = remembered;
+  }
+
+  /// The folder/album scope that was widened to "entire library", so the
+  /// landing screen's switcher can restore it. Cleared whenever a fresh
+  /// search is started from a screen icon.
+  ({String? albumId, String? folderId, String? label})? widenedFrom;
 
   /// Scopes subsequent searches to one publicly shared album. Call this
   /// before [pickSelfie] on the "Shared Gallery" screen a guest reaches
   /// via a share-link token.
   void useSharedGallery({required String token, String? password}) {
-    state = state.copyWith(
+    state = FaceSearchState(
       mode: FaceSearchMode.sharedGallery,
       shareToken: token,
       sharePassword: password,
@@ -251,7 +287,25 @@ class FaceSearchNotifier extends Notifier<FaceSearchState> {
     }
   }
 
+  /// Clears the selfie + results for a "Search again" but KEEPS the
+  /// scope (mode, folder/album, share token). The old version wiped the
+  /// scope too, so "Search again" after a folder search became a global
+  /// search, and after a client-gallery search fell back to the studio
+  /// endpoint.
   void reset() {
+    final s = state;
+    state = FaceSearchState(
+      mode: s.mode,
+      albumIdFilter: s.albumIdFilter,
+      folderIdFilter: s.folderIdFilter,
+      shareToken: s.shareToken,
+      sharePassword: s.sharePassword,
+      scopeLabel: s.scopeLabel,
+    );
+  }
+
+  /// Drops everything, including the scope.
+  void clearAll() {
     state = const FaceSearchState();
   }
 }

@@ -231,6 +231,13 @@ class MediaContentType {
     'm2ts': 'video/mp2t',
     'mts': 'video/mp2t',
     'ts': 'video/mp2t',
+    'dng': 'image/x-adobe-dng',
+    'nef': 'image/x-nikon-nef',
+    'cr2': 'image/x-canon-cr2',
+    'cr3': 'image/x-canon-cr3',
+    'orf': 'image/x-olympus-orf',
+    'arw': 'image/x-sony-arw',
+    'raw': 'image/raw',
   };
 
   static const Map<String, String> _extensionFor = {
@@ -251,6 +258,13 @@ class MediaContentType {
     'video/3gpp2': '3g2',
     'video/x-ms-wmv': 'wmv',
     'video/mp2t': 'ts',
+    'image/x-adobe-dng': 'dng',
+    'image/x-nikon-nef': 'nef',
+    'image/x-canon-cr2': 'cr2',
+    'image/x-canon-cr3': 'cr3',
+    'image/x-olympus-orf': 'orf',
+    'image/x-sony-arw': 'arw',
+    'image/raw': 'raw',
   };
 
   static String _ascii(List<int> b, int start, int end) =>

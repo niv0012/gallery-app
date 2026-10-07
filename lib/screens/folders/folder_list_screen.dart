@@ -22,7 +22,8 @@ import '../../widgets/common/loading_widget.dart';
 /// can be drilled into recursively, so folder-in-folder nesting reads
 /// as a normal file-browser hierarchy instead of one long flat list.
 class FolderListScreen extends ConsumerStatefulWidget {
-  const FolderListScreen({super.key});
+  final bool isEmbedded;
+  const FolderListScreen({super.key, this.isEmbedded = false});
 
   @override
   ConsumerState<FolderListScreen> createState() => _FolderListScreenState();
@@ -51,9 +52,6 @@ class _FolderListScreenState extends ConsumerState<FolderListScreen>
   @override
   void initState() {
     super.initState();
-    // Always do a fresh fetch when this screen opens so the list is
-    // never stale (e.g. folders created from another screen, or after
-    // a network error during a previous visit).
     Future.microtask(() {
       if (mounted) ref.read(folderProvider).load();
     });
@@ -76,7 +74,6 @@ class _FolderListScreenState extends ConsumerState<FolderListScreen>
     if (folderState.isLoading && rootFolders.isEmpty) {
       body = const Center(child: LoadingWidget(message: 'Loading folders…'));
     } else if (hasError) {
-      // API call failed — show a retry button so the user isn't stuck.
       body = Center(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
@@ -142,6 +139,15 @@ class _FolderListScreenState extends ConsumerState<FolderListScreen>
               ),
             );
           },
+        ),
+      );
+    }
+
+    if (widget.isEmbedded) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: body,
         ),
       );
     }

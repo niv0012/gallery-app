@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../screens/splash/splash_screen.dart';
+import '../../screens/splash/update_required_screen.dart';
 import '../../screens/onboarding/onboarding_screen.dart';
 import '../../screens/auth/role_selection_screen.dart';
 import '../../screens/auth/login_screen.dart';
@@ -28,6 +29,7 @@ import '../../screens/shared/pin_unlock_screen.dart';
 import '../../screens/admin/client_details_screen.dart';
 import '../../screens/admin/admin_analytics_screen.dart';
 import '../../screens/admin/admin_settings_screen.dart';
+import '../../screens/admin/link_preview_settings_screen.dart';
 import '../../screens/media/trash_screen.dart';
 import '../../screens/admin/notifications_screen.dart';
 import '../../screens/admin/notification_detail_screen.dart';
@@ -37,6 +39,7 @@ import '../../screens/admin/storage_overview_screen.dart';
 import '../../screens/admin/recent_activity_screen.dart';
 import '../../screens/admin/quick_actions_screen.dart';
 import '../../models/admin_dashboard_data.dart';
+import '../../models/share_link_model.dart';
 import '../../screens/albums/create_album_screen.dart';
 import '../../screens/albums/album_details_screen.dart';
 import '../../screens/albums/edit_album_screen.dart';
@@ -46,6 +49,8 @@ import '../../screens/folders/folder_details_screen.dart';
 import '../../screens/folders/rename_folder_screen.dart';
 import '../../screens/folders/move_folder_screen.dart';
 import '../../screens/folders/folder_settings_screen.dart';
+import '../../screens/folders/folder_share_settings_screen.dart';
+import '../../screens/folders/share_links_list_screen.dart';
 import '../../screens/media/media_grid_screen.dart';
 import '../../screens/media/media_favorites_screen.dart';
 import '../../screens/media/media_search_screen.dart';
@@ -59,7 +64,7 @@ import '../../upload/upload_queue_screen.dart';
 import '../../upload/upload_hub_screen.dart';
 import '../../upload/new_upload_screen.dart';
 import '../../screens/albums/share_settings_screen.dart';
-import '../../screens/collections/collection_share_settings_screen.dart';
+import '../../screens/albums/link_analytics_screen.dart';
 import '../../screens/client/shared_gallery_screen.dart';
 import '../../screens/client/chat_thread_screen.dart';
 import '../../screens/client/discover_studios_screen.dart';
@@ -67,8 +72,7 @@ import '../../screens/client/studio_profile_screen.dart';
 import '../../screens/client/favorite_studios_screen.dart';
 import '../../screens/client/shared_studios_screen.dart';
 import '../../screens/client/studio_shared_folders_screen.dart';
-import '../../screens/albums/collections_screen.dart';
-import '../../screens/albums/collection_details_screen.dart';
+
 import '../../screens/download_history/download_history_screen.dart';
 import '../../screens/client/invitations_screen.dart';
 import '../../screens/client/profile_settings/privacy_settings_screen.dart';
@@ -81,6 +85,8 @@ import '../../screens/legal/privacy_policy/privacy_policy_screen.dart';
 import '../../screens/legal/terms_conditions/terms_conditions_screen.dart';
 import '../../screens/legal/help_support/help_support_screen.dart';
 import '../../screens/subscription/subscription_plans_screen.dart';
+import '../../screens/download_history/zip_jobs_screen.dart';
+
 
 /// User-facing role picked on [RoleSelectionScreen]. Carried through
 /// Register / Complete Profile via route arguments so those screens can
@@ -177,6 +183,7 @@ class AppRoutes {
   AppRoutes._();
 
   static const String splash = '/';
+  static const String updateRequired = '/update-required';
   static const String pinUnlock = '/pin-unlock';
   static const String onboarding = '/onboarding';
   static const String roleSelection = '/role-selection';
@@ -201,9 +208,7 @@ class AppRoutes {
   static const String deleteAccount = '/delete-account';
   static const String permissions = '/permissions';
 
-  // Collections
-  static const String collections = '/collections';
-  static const String collectionsDetails = '/collections/details';
+
 
   // Download History (client profile)
   static const String downloadHistory = '/download-history';
@@ -232,6 +237,7 @@ class AppRoutes {
   static const String uploadQueue = '/upload-queue';
   static const String uploads = '/uploads';
   static const String newUpload = '/uploads/new';
+  static const String zipJobs = '/zip-jobs';
 
   static const String media = '/media';
   static const String mediaFavorites = '/media/favorites';
@@ -252,13 +258,17 @@ class AppRoutes {
   static const String adminFolderRename = '/admin/folders/rename';
   static const String adminFolderMove = '/admin/folders/move';
   static const String adminFolderSettings = '/admin/folders/settings';
+  static const String folderShareSettings = '/admin/folders/share-settings';
   static const String albumShareSettings = '/admin/albums/share-settings';
-  static const String collectionShareSettings = '/admin/collections/share-settings';
+  static const String shareLinksList = '/admin/share-links';
+  static const String linkAnalytics = '/admin/albums/link-analytics';
+  
   static const String sharedGallery = '/shared/gallery';
   static const String adminClientDetails = '/admin/clients/details';
   static const String adminAnalytics = '/admin/analytics';
   static const String adminSettings = '/admin/settings';
   static const String adminTrash = '/admin/trash';
+  static const String linkPreviewSettings = '/admin/link-preview-settings';
 
   // Studio management routes
   static const String teamManagement = '/admin/team';
@@ -348,6 +358,8 @@ class AppRoutes {
     switch (settings.name) {
       case splash:
         return _fade(const SplashScreen(), settings);
+      case updateRequired:
+        return _fade(const UpdateRequiredScreen(), settings);
       case pinUnlock:
         final args = settings.arguments as PinUnlockArgs;
         return _fade(PinUnlockScreen(
@@ -429,11 +441,7 @@ class AppRoutes {
       case permissions:
         return _slide(const AppPermissionsScreen(), settings);
 
-      case collections:
-        return _slide(const CollectionsScreen(), settings);
-      case collectionsDetails:
-        return _slide(CollectionDetailsScreen(
-            collectionId: settings.arguments as String), settings);
+
       case downloadHistory:
         return _slide(const DownloadHistoryScreen(), settings);
       case invitations:
@@ -464,7 +472,13 @@ class AppRoutes {
       case faceSearchLanding:
         return _slide(const FaceSearchLandingScreen(), settings);
       case faceSearchUpload:
-        return _slide(const FaceSearchUploadScreen(), settings);
+        return _slide(
+            FaceSearchUploadScreen(
+              initialSource: settings.arguments is ImageSource
+                  ? settings.arguments as ImageSource
+                  : null,
+            ),
+            settings);
       case faceSearchScanProgressPlaceholder:
         return _slide(
             FaceSearchScanProgressScreen(file: settings.arguments as XFile), settings);
@@ -473,6 +487,9 @@ class AppRoutes {
 
       case uploadQueue:
         return _fade(const UploadQueueScreen(), settings);
+
+      case zipJobs:
+        return _slide(const ZipJobsScreen(), settings);
 
       case adminAlbumCreate:
         return _slide(
@@ -554,8 +571,45 @@ class AppRoutes {
         return _slide(PhotoEditorScreen(media: args.media), settings);
 
       case albumShareSettings:
+        final rawArgs = settings.arguments;
+        String albumId;
+        String? albumName;
+        if (rawArgs is Map<String, dynamic>) {
+          albumId = rawArgs['albumId'] as String;
+          albumName = rawArgs['albumName'] as String?;
+        } else {
+          albumId = rawArgs as String;
+        }
         return _slide(
-            ShareSettingsScreen(albumId: settings.arguments as String), settings);
+            ShareSettingsScreen(albumId: albumId, albumName: albumName), settings);
+      case linkAnalytics:
+        final args = settings.arguments as Map<String, dynamic>;
+        return _slide(
+            LinkAnalyticsScreen(
+              linkId: args['linkId'] as String,
+              link: args['link'] as GalleryShareLink,
+            ),
+            settings);
+
+      case shareLinksList:
+        final args = settings.arguments as Map<String, String>;
+        return _slide(
+            ShareLinksListScreen(
+              folderId: args['folderId'],
+              albumId: args['albumId'],
+              title: args['title'] ?? 'Links',
+            ),
+            settings);
+
+      case folderShareSettings:
+        final args = settings.arguments as Map<String, dynamic>;
+        return _slide(
+            FolderShareSettingsScreen(
+              folderId: args['folderId'] as String,
+              folderName: args['folderName'] as String? ?? 'Folder',
+              link: args['link'] as GalleryShareLink?,
+            ),
+            settings);
       case sharedGallery:
         final rawArgs = settings.arguments;
         if (rawArgs is SharedGalleryArgs) {
@@ -571,6 +625,8 @@ class AppRoutes {
         return _slide(const AnalyticsScreen(), settings);
       case adminSettings:
         return _slide(const AdminSettingsScreen(), settings);
+      case linkPreviewSettings:
+        return _slide(const LinkPreviewSettingsScreen(), settings);
       case adminTrash:
         return _slide(const TrashScreen(), settings);
       case subscriptionPlans:
@@ -610,10 +666,11 @@ class AppRoutes {
       case uploads:
         return _slide(const UploadHubScreen(), settings);
       case newUpload:
-        return _slide(const NewUploadScreen(), settings);
-      case uploadQueue:
-        return _slide(const UploadQueueScreen(), settings);
-
+        final args = settings.arguments as Map<String, dynamic>? ?? {};
+        return _slide(NewUploadScreen(
+          initialFolderId: args['folderId'] as String?,
+          initialAlbumId: args['albumId'] as String?,
+        ), settings);
       default:
         // Unknown routes should never silently redirect to SplashScreen
         // (which auto-navigates to role selection). Instead, pop back to

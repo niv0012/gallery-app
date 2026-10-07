@@ -1,15 +1,17 @@
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, select, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_client_user, get_current_studio_user, require_active_plan
 from app.core.album_sharing import active_shares_for_client
 from app.core.storage import build_media_url
+from app.core.visibility import is_visible_to_client
 from app.db.session import get_db
 from app.models.connection import ConnectionStatus, StudioClientConnection
-from app.models.gallery import Album, Folder, Media, MediaLike, MediaType, ShareLink
+from app.models.gallery import Album, Folder, Media, MediaLike, MediaType, ShareLink, ShareLinkAlbum
 from app.models.user import User
 from app.schemas.gallery import (
     AlbumCreate,
@@ -18,15 +20,20 @@ from app.schemas.gallery import (
     AlbumStatsRead,
     AlbumUpdate,
     ConnectedAlbumRead,
+    DeletePreviewResponse,
+    DeleteMode,
+    RestoreResponse,
+    TrashedAlbumRead,
 )
+import sqlalchemy as sa
 from app.schemas.user import MessageResponse
 
 router = APIRouter(prefix="/albums", tags=["gallery-albums"])
 
 
-def _get_owned_album(db: Session, album_id: uuid.UUID, owner_id: uuid.UUID) -> Album:
+def _get_owned_album(db: Session, album_id: uuid.UUID, owner_id: uuid.UUID, allow_deleted: bool = False) -> Album:
     album = db.get(Album, album_id)
-    if album is None or album.owner_id != owner_id:
+    if album is None or album.owner_id != owner_id or (not allow_deleted and album.deleted_at is not None):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found")
     return album
 
@@ -41,7 +48,13 @@ def _media_counts(db: Session, owner_id: uuid.UUID) -> dict[uuid.UUID, tuple[int
             func.sum(case((Media.media_type == MediaType.photo, 1), else_=0)),
             func.sum(case((Media.media_type == MediaType.video, 1), else_=0)),
         )
-        .where(Media.owner_id == owner_id, Media.album_id.isnot(None), Media.is_deleted.is_(False))
+        .join(Album, Album.id == Media.album_id)
+        .where(
+            Media.owner_id == owner_id,
+            Media.album_id.isnot(None),
+            Media.is_deleted.is_(False),
+            Album.deleted_at.is_(None),
+        )
         .group_by(Media.album_id)
     ).all()
     return {album_id: (int(photos or 0), int(videos or 0)) for album_id, photos, videos in rows}
@@ -56,7 +69,13 @@ def _cover_thumbnails(db: Session, owner_id: uuid.UUID) -> dict[uuid.UUID, str]:
     """
     rows = db.execute(
         select(Media.album_id, Media.thumbnail_path, Media.file_path)
-        .where(Media.owner_id == owner_id, Media.album_id.isnot(None), Media.is_deleted.is_(False))
+        .join(Album, Album.id == Media.album_id)
+        .where(
+            Media.owner_id == owner_id,
+            Media.album_id.isnot(None),
+            Media.is_deleted.is_(False),
+            Album.deleted_at.is_(None),
+        )
         .order_by(Media.album_id, Media.created_at.desc())
     ).all()
     covers: dict[uuid.UUID, str] = {}
@@ -82,7 +101,13 @@ def _media_counts_multi(db: Session, owner_ids: list[uuid.UUID]) -> dict[uuid.UU
             func.sum(case((Media.media_type == MediaType.photo, 1), else_=0)),
             func.sum(case((Media.media_type == MediaType.video, 1), else_=0)),
         )
-        .where(Media.owner_id.in_(owner_ids), Media.album_id.isnot(None), Media.is_deleted.is_(False))
+        .join(Album, Album.id == Media.album_id)
+        .where(
+            Media.owner_id.in_(owner_ids),
+            Media.album_id.isnot(None),
+            Media.is_deleted.is_(False),
+            Album.deleted_at.is_(None),
+        )
         .group_by(Media.album_id)
     ).all()
     return {album_id: (int(photos or 0), int(videos or 0)) for album_id, photos, videos in rows}
@@ -96,7 +121,13 @@ def _cover_thumbnails_multi(db: Session, owner_ids: list[uuid.UUID]) -> dict[uui
         return {}
     rows = db.execute(
         select(Media.album_id, Media.thumbnail_path, Media.file_path)
-        .where(Media.owner_id.in_(owner_ids), Media.album_id.isnot(None), Media.is_deleted.is_(False))
+        .join(Album, Album.id == Media.album_id)
+        .where(
+            Media.owner_id.in_(owner_ids),
+            Media.album_id.isnot(None),
+            Media.is_deleted.is_(False),
+            Album.deleted_at.is_(None),
+        )
         .order_by(Media.album_id, Media.created_at.desc())
     ).all()
     covers: dict[uuid.UUID, str] = {}
@@ -123,7 +154,6 @@ def _protected_share_link_album_ids_multi(db: Session, owner_ids: list[uuid.UUID
     """
     if not owner_ids:
         return set()
-    from datetime import datetime, timezone
 
     now = datetime.now(timezone.utc)
     rows = db.execute(
@@ -137,6 +167,43 @@ def _protected_share_link_album_ids_multi(db: Session, owner_ids: list[uuid.UUID
     return set(rows)
 
 
+def _next_unique_album_name(
+    db: Session,
+    *,
+    owner_id: uuid.UUID,
+    folder_id: uuid.UUID | None,
+    preferred_name: str,
+    exclude_id: uuid.UUID | None = None,
+) -> str:
+    sibling_query = select(Album.name).where(
+        Album.owner_id == owner_id,
+        Album.deleted_at.is_(None),
+    )
+    if folder_id is None:
+        sibling_query = sibling_query.where(Album.folder_id.is_(None))
+    else:
+        sibling_query = sibling_query.where(Album.folder_id == folder_id)
+    if exclude_id is not None:
+        sibling_query = sibling_query.where(Album.id != exclude_id)
+
+    existing_names = set(db.execute(sibling_query).scalars().all())
+    if preferred_name not in existing_names:
+        return preferred_name
+
+    suffix = 2
+    while True:
+        candidate = f"{preferred_name} ({suffix})"
+        if candidate not in existing_names:
+            return candidate
+        suffix += 1
+
+
+def _days_left_before_purge(deleted_at: datetime, purge_days: int = 30) -> int:
+    cutoff = deleted_at + timedelta(days=purge_days)
+    remaining = cutoff - datetime.now(timezone.utc)
+    return max(0, int(remaining.total_seconds() // 86400))
+
+
 def _watermark_album_ids_multi(db: Session, owner_ids: list[uuid.UUID]) -> set[uuid.UUID]:
     """Album ids (within `owner_ids`) where the studio enabled
     `show_watermark=True` on at least one active public `ShareLink`.
@@ -145,7 +212,6 @@ def _watermark_album_ids_multi(db: Session, owner_ids: list[uuid.UUID]) -> set[u
     """
     if not owner_ids:
         return set()
-    from datetime import datetime, timezone
 
     now = datetime.now(timezone.utc)
     rows = db.execute(
@@ -159,6 +225,50 @@ def _watermark_album_ids_multi(db: Session, owner_ids: list[uuid.UUID]) -> set[u
     return {r for r in rows if r is not None}
 
 
+def _auto_include_album_if_needed(db: Session, owner_id: uuid.UUID, folder_id: uuid.UUID, album_id: uuid.UUID) -> None:
+    """When an album is created in or moved to a folder, check if that folder
+    has an active share link with auto_include_new=True. If it does, and the
+    folder is not hidden, automatically add the album to the link.
+    """
+    if not folder_id:
+        return
+        
+    folder = db.get(Folder, folder_id)
+    if not folder or folder.is_hidden:
+        return
+        
+    links = db.execute(
+        select(ShareLink).where(
+            ShareLink.source_folder_id == folder_id,
+            ShareLink.owner_id == owner_id,
+            ShareLink.is_revoked.is_(False),
+            ShareLink.auto_include_new.is_(True),
+        )
+    ).scalars().all()
+    
+    for link in links:
+        # Check if already included (shouldn't happen on create, but might on move)
+        existing = db.execute(
+            select(ShareLinkAlbum).where(
+                ShareLinkAlbum.share_link_id == link.id,
+                ShareLinkAlbum.album_id == album_id
+            )
+        ).scalar_one_or_none()
+        
+        if not existing:
+            # Get max display order for the link
+            max_order = db.execute(
+                select(func.max(ShareLinkAlbum.display_order))
+                .where(ShareLinkAlbum.share_link_id == link.id)
+            ).scalar() or 0
+            
+            db.add(ShareLinkAlbum(
+                share_link_id=link.id,
+                album_id=album_id,
+                display_order=max_order + 1
+            ))
+
+
 @router.post("", response_model=AlbumRead, status_code=status.HTTP_201_CREATED)
 def create_album(
     payload: AlbumCreate,
@@ -167,7 +277,7 @@ def create_album(
 ) -> AlbumRead:
     if payload.folder_id is not None:
         folder = db.get(Folder, payload.folder_id)
-        if folder is None or folder.owner_id != current_user.id:
+        if folder is None or folder.owner_id != current_user.id or getattr(folder, "deleted_at", None) is not None:
             raise HTTPException(status_code=404, detail="Folder not found")
 
     max_order = db.execute(
@@ -185,6 +295,11 @@ def create_album(
     db.add(album)
     db.commit()
     db.refresh(album)
+    
+    if album.folder_id:
+        _auto_include_album_if_needed(db, current_user.id, album.folder_id, album.id)
+        db.commit()
+        
     return AlbumRead.from_model(album)
 
 
@@ -196,7 +311,7 @@ def list_albums(
     current_user: User = Depends(get_current_studio_user),
     db: Session = Depends(get_db),
 ) -> list[AlbumRead]:
-    query = select(Album).where(Album.owner_id == current_user.id)
+    query = select(Album).where(Album.deleted_at.is_(None), Album.owner_id == current_user.id)
     if unfiled_only:
         query = query.where(Album.folder_id.is_(None))
     elif folder_id is not None:
@@ -214,13 +329,35 @@ def list_albums(
     ]
 
 
+@router.get("/trash", response_model=list[TrashedAlbumRead])
+def list_trashed_albums(
+    current_user: User = Depends(get_current_studio_user),
+    db: Session = Depends(get_db),
+) -> list[TrashedAlbumRead]:
+    albums = db.execute(
+        select(Album).where(
+            Album.owner_id == current_user.id,
+            Album.deleted_at.isnot(None),
+        )
+    ).scalars().all()
+    return [
+        TrashedAlbumRead(
+            id=album.id,
+            name=album.name,
+            deleted_at=album.deleted_at,
+            days_left=_days_left_before_purge(album.deleted_at),
+        )
+        for album in sorted(albums, key=lambda item: item.deleted_at, reverse=True)
+    ]
+
+
 @router.get("/stats", response_model=AlbumStatsRead)
 def get_album_stats(
     current_user: User = Depends(get_current_studio_user),
     db: Session = Depends(get_db),
 ) -> AlbumStatsRead:
     albums = db.execute(
-        select(Album).where(Album.owner_id == current_user.id)
+        select(Album).where(Album.deleted_at.is_(None), Album.owner_id == current_user.id)
     ).scalars().all()
     if not albums:
         return AlbumStatsRead(
@@ -305,7 +442,7 @@ def list_shared_albums(
     if not shared_album_ids:
         return []
 
-    query = select(Album).where(
+    query = select(Album).where(Album.deleted_at.is_(None), 
         Album.owner_id.in_(owner_ids),
         Album.id.in_(shared_album_ids),
     )
@@ -359,7 +496,7 @@ def list_shared_albums(
             show_watermark=a.id in watermark_album_ids,
         )
         for a in albums
-        if a.owner_id in studios
+        if a.owner_id in studios and is_visible_to_client(db, album_id=a.id)
     ]
 
 
@@ -393,11 +530,12 @@ def update_album(
     elif "description" in updates and updates["description"] is not None:
         album.description = updates["description"]
 
+    old_folder_id = album.folder_id
     if payload.clear_folder:
         album.folder_id = None
     elif "folder_id" in updates and updates["folder_id"] is not None:
         folder = db.get(Folder, updates["folder_id"])
-        if folder is None or folder.owner_id != current_user.id:
+        if folder is None or folder.owner_id != current_user.id or getattr(folder, "deleted_at", None) is not None:
             raise HTTPException(status_code=404, detail="Folder not found")
         album.folder_id = updates["folder_id"]
 
@@ -410,6 +548,10 @@ def update_album(
 
     db.commit()
     db.refresh(album)
+    
+    if album.folder_id and album.folder_id != old_folder_id:
+        _auto_include_album_if_needed(db, current_user.id, album.folder_id, album.id)
+        db.commit()
     counts = _media_counts(db, current_user.id)
     covers = _cover_thumbnails(db, current_user.id)
     return AlbumRead.from_model(album, *counts.get(album.id, (0, 0)), cover_thumbnail_url=covers.get(album.id))
@@ -444,35 +586,99 @@ def reorder_albums(
     ]
 
 
+
+@router.get("/{album_id}/delete-preview", response_model=DeletePreviewResponse)
+def preview_delete_album(
+    album_id: uuid.UUID,
+    mode: DeleteMode = DeleteMode.move_up,
+    current_user: User = Depends(get_current_studio_user),
+    db: Session = Depends(get_db),
+) -> DeletePreviewResponse:
+    album = _get_owned_album(db, album_id, current_user.id)
+    
+    media_affected = db.execute(select(sa.func.count(Media.id)).where(Media.album_id == album_id)).scalar() or 0
+    
+    return DeletePreviewResponse(
+        mode=mode,
+        folders_affected=0,
+        albums_affected=1,
+        media_affected=media_affected
+    )
+
+
+@router.post("/{album_id}/restore", response_model=RestoreResponse)
+def restore_album(
+    album_id: uuid.UUID,
+    current_user: User = Depends(get_current_studio_user),
+    db: Session = Depends(get_db),
+) -> RestoreResponse:
+    album = _get_owned_album(db, album_id, current_user.id, allow_deleted=True)
+    if album.deleted_at is None:
+        raise HTTPException(status_code=400, detail="Album is not deleted")
+
+    deleted_at_marker = album.deleted_at
+    restored_to_root = False
+
+    if album.folder_id is not None:
+        parent_folder = db.get(Folder, album.folder_id)
+        if (
+            parent_folder is None
+            or parent_folder.owner_id != current_user.id
+            or parent_folder.deleted_at is not None
+        ):
+            album.folder_id = None
+            restored_to_root = True
+
+    album.name = _next_unique_album_name(
+        db,
+        owner_id=current_user.id,
+        folder_id=album.folder_id,
+        preferred_name=album.name,
+        exclude_id=album.id,
+    )
+    album.deleted_at = None
+
+    db.execute(
+        update(Media)
+        .where(
+            Media.owner_id == current_user.id,
+            Media.album_id == album.id,
+            Media.deleted_at == deleted_at_marker,
+        )
+        .values(deleted_at=None, is_deleted=False)
+    )
+
+    db.commit()
+    message = "Album restored"
+    if restored_to_root:
+        message = "Album restored to root because its parent folder is unavailable."
+    return RestoreResponse(message=message, restored_to_root=restored_to_root)
+
+
 @router.delete("/{album_id}", response_model=MessageResponse)
 def delete_album(
     album_id: uuid.UUID,
-    force: bool = Query(
-        default=False,
-        description="If true, any active media in this album is moved to Trash first. "
-        "If false and the album still has active media, the request is rejected with 409.",
-    ),
+    mode: DeleteMode = DeleteMode.move_up,
     current_user: User = Depends(get_current_studio_user),
     db: Session = Depends(get_db),
 ) -> MessageResponse:
-    from datetime import datetime, timezone
-
+    """Deletes an album according to the requested mode in a single transaction."""
     album = _get_owned_album(db, album_id, current_user.id)
-
-    active_media = db.execute(
-        select(Media).where(Media.album_id == album.id, Media.is_deleted.is_(False))
-    ).scalars().all()
-
-    if active_media and not force:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Album still has {len(active_media)} item(s). Pass force=true to move them to Trash.",
+    folder_id = album.folder_id
+    now = datetime.now(timezone.utc)
+    
+    if mode == DeleteMode.move_up:
+        # Move up media to the album's parent folder
+        db.execute(
+            update(Media).where(Media.album_id == album_id).values(album_id=None, folder_id=folder_id)
         )
-
-    for media in active_media:
-        media.is_deleted = True
-        media.deleted_at = datetime.now(timezone.utc)
-
-    db.delete(album)
+        album.deleted_at = now
+    else:
+        # delete_all: Mark media as deleted
+        db.execute(
+            update(Media).where(Media.album_id == album_id, Media.is_deleted.is_(False)).values(deleted_at=now, is_deleted=True)
+        )
+        album.deleted_at = now
+        
     db.commit()
-    return MessageResponse(message="Album deleted.")
+    return MessageResponse(message=f"Album deleted successfully (mode: {mode.value}).")

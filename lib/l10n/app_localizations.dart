@@ -63,8 +63,7 @@ import 'app_localizations_hi.dart';
 /// be consistent with the languages listed in the AppLocalizations.supportedLocales
 /// property.
 abstract class AppLocalizations {
-  AppLocalizations(String locale)
-      : localeName = intl.Intl.canonicalizedLocale(locale.toString());
+  AppLocalizations(String locale) : localeName = intl.Intl.canonicalizedLocale(locale.toString());
 
   final String localeName;
 
@@ -72,8 +71,7 @@ abstract class AppLocalizations {
     return Localizations.of<AppLocalizations>(context, AppLocalizations);
   }
 
-  static const LocalizationsDelegate<AppLocalizations> delegate =
-      _AppLocalizationsDelegate();
+  static const LocalizationsDelegate<AppLocalizations> delegate = _AppLocalizationsDelegate();
 
   /// A list of this localizations delegate along with the default localizations
   /// delegates.
@@ -85,8 +83,7 @@ abstract class AppLocalizations {
   /// Additional delegates can be added by appending to this list in
   /// MaterialApp. This list does not have to be used at all if a custom list
   /// of delegates is preferred or required.
-  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates =
-      <LocalizationsDelegate<dynamic>>[
+  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates = <LocalizationsDelegate<dynamic>>[
     delegate,
     GlobalMaterialLocalizations.delegate,
     GlobalCupertinoLocalizations.delegate,
@@ -237,10 +234,135 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Log Out'**
   String get logOut;
+
+  /// No description provided for @folderExplorerMyFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'My Files'**
+  String get folderExplorerMyFiles;
+
+  /// No description provided for @folderExplorerManageFolders.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage Folders'**
+  String get folderExplorerManageFolders;
+
+  /// No description provided for @folderExplorerMenu.
+  ///
+  /// In en, this message translates to:
+  /// **'Folder explorer menu'**
+  String get folderExplorerMenu;
+
+  /// No description provided for @folderExplorerAllAlbums.
+  ///
+  /// In en, this message translates to:
+  /// **'All Albums'**
+  String get folderExplorerAllAlbums;
+
+  /// No description provided for @folderExplorerEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'This folder is empty.'**
+  String get folderExplorerEmpty;
+
+  /// No description provided for @folderExplorerLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading contents…'**
+  String get folderExplorerLoading;
+
+  /// No description provided for @folderExplorerGrid.
+  ///
+  /// In en, this message translates to:
+  /// **'Grid'**
+  String get folderExplorerGrid;
+
+  /// No description provided for @folderExplorerList.
+  ///
+  /// In en, this message translates to:
+  /// **'List'**
+  String get folderExplorerList;
+
+  /// No description provided for @folderExplorerDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get folderExplorerDetails;
+
+  /// No description provided for @folderExplorerSortByName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get folderExplorerSortByName;
+
+  /// No description provided for @folderExplorerSortByDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Date'**
+  String get folderExplorerSortByDate;
+
+  /// No description provided for @folderExplorerSortByDateCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Date Created'**
+  String get folderExplorerSortByDateCreated;
+
+  /// No description provided for @folderExplorerSortBySize.
+  ///
+  /// In en, this message translates to:
+  /// **'Size'**
+  String get folderExplorerSortBySize;
+
+  /// No description provided for @folderExplorerAscending.
+  ///
+  /// In en, this message translates to:
+  /// **'Ascending'**
+  String get folderExplorerAscending;
+
+  /// No description provided for @folderExplorerDescending.
+  ///
+  /// In en, this message translates to:
+  /// **'Descending'**
+  String get folderExplorerDescending;
+
+  /// No description provided for @folderExplorerLooseMedia.
+  ///
+  /// In en, this message translates to:
+  /// **'Loose Media'**
+  String get folderExplorerLooseMedia;
+
+  /// No description provided for @folderExplorerFolders.
+  ///
+  /// In en, this message translates to:
+  /// **'Folders'**
+  String get folderExplorerFolders;
+
+  /// No description provided for @folderExplorerType.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get folderExplorerType;
+
+  /// No description provided for @folderExplorerItems.
+  ///
+  /// In en, this message translates to:
+  /// **'Items'**
+  String get folderExplorerItems;
+
+  /// No description provided for @uploadCompressLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Compress files before upload'**
+  String get uploadCompressLabel;
+
+  /// No description provided for @uploadCompressSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos are resized to 2048 px at JPEG quality 85. Videos are not compressed.'**
+  String get uploadCompressSubtitle;
 }
 
-class _AppLocalizationsDelegate
-    extends LocalizationsDelegate<AppLocalizations> {
+class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
   const _AppLocalizationsDelegate();
 
   @override
@@ -249,27 +371,26 @@ class _AppLocalizationsDelegate
   }
 
   @override
-  bool isSupported(Locale locale) =>
-      <String>['en', 'es', 'hi'].contains(locale.languageCode);
+  bool isSupported(Locale locale) => <String>['en', 'es', 'hi'].contains(locale.languageCode);
 
   @override
   bool shouldReload(_AppLocalizationsDelegate old) => false;
 }
 
 AppLocalizations lookupAppLocalizations(Locale locale) {
+
+
   // Lookup logic when only language code is specified.
   switch (locale.languageCode) {
-    case 'en':
-      return AppLocalizationsEn();
-    case 'es':
-      return AppLocalizationsEs();
-    case 'hi':
-      return AppLocalizationsHi();
+    case 'en': return AppLocalizationsEn();
+    case 'es': return AppLocalizationsEs();
+    case 'hi': return AppLocalizationsHi();
   }
 
   throw FlutterError(
-      'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
-      'an issue with the localizations generation tool. Please file an issue '
-      'on GitHub with a reproducible sample app and the gen-l10n configuration '
-      'that was used.');
+    'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
+    'an issue with the localizations generation tool. Please file an issue '
+    'on GitHub with a reproducible sample app and the gen-l10n configuration '
+    'that was used.'
+  );
 }

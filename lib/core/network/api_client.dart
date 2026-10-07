@@ -117,10 +117,13 @@ class ApiClient {
     return '$baseUrl$cleanPath';
   }
 
-  Future<dynamic> get(String path, {bool withAuth = true}) async {
+  Future<dynamic> get(String path, {bool withAuth = true, Duration? receiveTimeout}) async {
     return _guarded(() => _dio.get(
           _url(path),
-          options: Options(extra: {'withAuth': withAuth}),
+          options: Options(
+            extra: {'withAuth': withAuth},
+            receiveTimeout: receiveTimeout,
+          ),
         ));
   }
 

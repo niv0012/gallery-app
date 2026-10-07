@@ -102,5 +102,4 @@ class NewUploadNotifier extends StateNotifier<NewUploadState> {
       uploadMetadata: uploadMetadata,
     );
   }
-
 }

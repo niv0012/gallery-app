@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -12,6 +14,8 @@ import 'providers/settings_provider.dart';
 import 'services/deep_link_service.dart';
 import 'services/push_notification_service.dart';
 import 'services/upload_foreground_service.dart';
+import 'upload/upload_job_model.dart' show UploadJobStatus;
+import 'upload/upload_queue_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'firebase_options.dart';
@@ -104,11 +108,23 @@ class _PicGalleryState extends ConsumerState<PicGallery>
     final elapsed = DateTime.now().difference(_backgroundedAt!);
     _backgroundedAt = null;
     if (elapsed < const Duration(seconds: 2) ||
-        _refreshingOnResume ||
         !ref.read(authStateProvider).isLoggedIn) {
       return;
     }
 
+    // iOS suspends network requests when the app is backgrounded — Android
+    // uses the foreground service to keep going. On iOS return-to-foreground,
+    // re-queue any paused jobs so uploads resume automatically.
+    if (!kIsWeb && Platform.isIOS) {
+      final queueState = ref.read(uploadQueueProvider);
+      final hasPaused = queueState.valueOrNull?.jobs.any((j) =>
+          j.status == UploadJobStatus.paused) ?? false;
+      if (hasPaused) {
+        ref.read(uploadQueueProvider.notifier).resumeAll();
+      }
+    }
+
+    if (_refreshingOnResume) return;
     _refreshingOnResume = true;
     Future.wait([
       ref.read(mediaProvider).load(),

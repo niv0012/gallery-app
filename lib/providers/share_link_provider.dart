@@ -23,8 +23,9 @@ final shareLinkRepositoryProvider = Provider<ShareLinkRepository>((ref) {
 class ShareTarget {
   final String? albumId;
   final String? collectionId;
+  final String? folderId;
 
-  const ShareTarget({this.albumId, this.collectionId});
+  const ShareTarget({this.albumId, this.collectionId, this.folderId});
 
   @override
   bool operator ==(Object other) =>
@@ -32,10 +33,11 @@ class ShareTarget {
       other is ShareTarget &&
           runtimeType == other.runtimeType &&
           albumId == other.albumId &&
-          collectionId == other.collectionId;
+          collectionId == other.collectionId &&
+          folderId == other.folderId;
 
   @override
-  int get hashCode => Object.hash(albumId, collectionId);
+  int get hashCode => Object.hash(albumId, collectionId, folderId);
 }
 
 class ShareLinkController extends ChangeNotifier {
@@ -52,8 +54,11 @@ class ShareLinkController extends ChangeNotifier {
   String? _error;
   String? get error => _error;
 
-  GalleryShareLink? _activeLink;
-  GalleryShareLink? get activeLink => _activeLink;
+  List<GalleryShareLink> _activeLinks = [];
+  List<GalleryShareLink> get activeLinks => _activeLinks;
+
+  // Backwards compatibility for screens that only expect one link
+  GalleryShareLink? get activeLink => _activeLinks.isEmpty ? null : _activeLinks.first;
 
   Future<void> load() async {
     _isLoading = true;
@@ -61,14 +66,12 @@ class ShareLinkController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // `list_share_links` already orders by `created_at desc`, so the
-      // first non-revoked link is the current one; if every link for
-      // this album has been revoked, fall back to the most recent one
-      // so its analytics/"Revoked" status still has something to show.
-      final links = await _repo.fetchLinks(albumId: target.albumId, collectionId: target.collectionId);
-      _activeLink = links.isEmpty
-          ? null
-          : links.firstWhere((l) => !l.isRevoked, orElse: () => links.first);
+      final links = await _repo.fetchLinks(
+        albumId: target.albumId,
+        collectionId: target.collectionId,
+        folderId: target.folderId,
+      );
+      _activeLinks = links.where((l) => !l.isRevoked).toList();
     } catch (e) {
       _error = e is ApiException ? e.message : e.toString();
     }
@@ -77,7 +80,42 @@ class ShareLinkController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<GalleryShareLink> createOrUpdate({
+  Future<GalleryShareLink> createLink({
+    String? clientId,
+    String? password,
+    DateTime? expiresAt,
+    required bool allowDownload,
+    required bool showWatermark,
+    List<String>? albumIds,
+    List<String>? folderIds,
+    bool includeAll = false,
+    bool includeFolderItems = false,
+    bool autoIncludeNew = false,
+    String? kind,
+  }) async {
+    final result = await _repo.createLink(
+      albumId: target.albumId,
+      collectionId: target.collectionId,
+      folderId: target.folderId,
+      albumIds: albumIds,
+      folderIds: folderIds,
+      includeAll: includeAll,
+      includeFolderItems: includeFolderItems,
+      autoIncludeNew: autoIncludeNew,
+      kind: kind ?? 'standard',
+      clientId: clientId,
+      password: password,
+      expiresAt: expiresAt,
+      allowDownload: allowDownload,
+      showWatermark: showWatermark,
+    );
+    _activeLinks.add(result);
+    notifyListeners();
+    return result;
+  }
+
+  Future<GalleryShareLink> updateLink({
+    required String id,
     String? clientId,
     bool clearClient = false,
     String? password,
@@ -86,41 +124,41 @@ class ShareLinkController extends ChangeNotifier {
     bool clearExpiry = false,
     required bool allowDownload,
     required bool showWatermark,
+    List<String>? albumIds,
+    List<String>? folderIds,
+    bool? includeAll,
+    bool? includeFolderItems,
+    bool autoIncludeNew = false,
+    String? kind,
   }) async {
-    final current = _activeLink;
-    final GalleryShareLink result;
-    if (current == null || current.isRevoked) {
-      result = await _repo.createLink(
-        albumId: target.albumId,
-        collectionId: target.collectionId,
-        clientId: clientId,
-        password: password,
-        expiresAt: expiresAt,
-        allowDownload: allowDownload,
-        showWatermark: showWatermark,
-      );
-    } else {
-      result = await _repo.updateLink(
-        id: current.id,
-        clientId: clientId,
-        clearClient: clearClient,
-        password: password,
-        clearPassword: clearPassword,
-        expiresAt: expiresAt,
-        clearExpiry: clearExpiry,
-        allowDownload: allowDownload,
-        showWatermark: showWatermark,
-      );
+    final result = await _repo.updateLink(
+      id: id,
+      clientId: clientId,
+      clearClient: clearClient,
+      password: password,
+      clearPassword: clearPassword,
+      expiresAt: expiresAt,
+      clearExpiry: clearExpiry,
+      allowDownload: allowDownload,
+      showWatermark: showWatermark,
+      albumIds: albumIds,
+      folderIds: folderIds,
+      includeAll: includeAll,
+      includeFolderItems: includeFolderItems,
+      autoIncludeNew: autoIncludeNew,
+      kind: kind,
+    );
+    final index = _activeLinks.indexWhere((l) => l.id == id);
+    if (index != -1) {
+      _activeLinks[index] = result;
     }
-    _activeLink = result;
     notifyListeners();
     return result;
   }
 
-  Future<void> revoke() async {
-    final current = _activeLink;
-    if (current == null) return;
-    _activeLink = await _repo.updateLink(id: current.id, isRevoked: true);
+  Future<void> revoke(String id) async {
+    await _repo.updateLink(id: id, isRevoked: true);
+    _activeLinks.removeWhere((l) => l.id == id);
     notifyListeners();
   }
 }
@@ -235,6 +273,8 @@ class PublicGalleryController extends ChangeNotifier {
       _data = await _repo.fetchPublicGallery(token: token, password: password, albumId: albumId);
       _status = PublicGalleryStatus.loaded;
       _password = password;
+      // Reset folder navigation on fresh unlock
+      _folderStack.clear();
       debugPrint(
           '[API_LOOKUP_DEBUG] PublicGalleryController successfully loaded gallery: ${_data?.album?.name ?? _data?.collection?.name}');
     } catch (e) {
@@ -242,6 +282,67 @@ class PublicGalleryController extends ChangeNotifier {
           isPasswordAttempt: password != null && password.isNotEmpty);
     }
     notifyListeners();
+  }
+
+  // --- Folder navigation stack ---
+  /// Stack of (folderId, folderName) pairs representing the current breadcrumb.
+  final List<(String id, String name)> _folderStack = [];
+  List<(String id, String name)> get folderStack => List.unmodifiable(_folderStack);
+
+  /// Whether we're currently browsing inside a sub-folder.
+  bool get isInsideSubFolder => _folderStack.isNotEmpty;
+
+  /// Navigate into a sub-folder, loading its contents from the backend.
+  Future<void> navigateToFolder(String folderId, String folderName) async {
+    _status = PublicGalleryStatus.loading;
+    notifyListeners();
+    try {
+      final result = await _repo.fetchPublicFolder(
+        token: token,
+        folderId: folderId,
+        password: _password,
+      );
+      _data = result;
+      _folderStack.add((folderId, folderName));
+      _status = PublicGalleryStatus.loaded;
+    } catch (e) {
+      _handleError(e);
+    }
+    notifyListeners();
+  }
+
+  /// Navigate back up one level in the folder hierarchy.
+  Future<void> navigateBack() async {
+    if (_folderStack.isEmpty) return;
+    _folderStack.removeLast();
+    _status = PublicGalleryStatus.loading;
+    notifyListeners();
+    try {
+      if (_folderStack.isEmpty) {
+        // Back to root
+        _data = await _repo.fetchPublicGallery(token: token, password: _password);
+      } else {
+        final (parentId, _) = _folderStack.last;
+        _data = await _repo.fetchPublicFolder(
+          token: token,
+          folderId: parentId,
+          password: _password,
+        );
+        // We already popped, so re-add last entry after fetch
+      }
+      _status = PublicGalleryStatus.loaded;
+    } catch (e) {
+      _handleError(e);
+    }
+    notifyListeners();
+  }
+
+  Future<String> requestPrivateLink(List<String> mediaIds) async {
+    return await _repo.requestPrivateLink(
+      token: token,
+      password: _password,
+      mediaIds: mediaIds,
+    );
   }
 
   void _handleError(Object error, {bool isPasswordAttempt = false}) {
@@ -301,6 +402,20 @@ class PublicGalleryController extends ChangeNotifier {
       );
     } catch (_) {
       // Best-effort only.
+    }
+  }
+
+  Future<void> toggleFavourite(String mediaId, String guestIdentifier) async {
+    try {
+      await _repo.toggleFavourite(
+        token: token,
+        mediaId: mediaId,
+        guestIdentifier: guestIdentifier,
+        password: _password,
+      );
+    } catch (e) {
+      debugPrint('[API_LOOKUP_DEBUG] Error toggling favourite: $e');
+      rethrow;
     }
   }
 }

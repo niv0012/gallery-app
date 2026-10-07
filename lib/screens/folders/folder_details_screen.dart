@@ -12,15 +12,15 @@ import '../../providers/folder_provider.dart';
 import '../../providers/media_provider.dart';
 import '../../upload/upload_queue_provider.dart';
 import '../../widgets/common/custom_app_bar.dart';
+import '../../widgets/media/face_search_actions.dart';
 import '../../widgets/common/empty_state_card.dart';
 import '../../widgets/common/folder_tile.dart';
 import '../../widgets/media/media_thumb.dart';
 import '../../widgets/studio/share_with_client_sheet.dart';
 import '../media/media_grid_screen.dart';
 import '../../core/theme/theme_context.dart';
-import 'dart:typed_data';
-import '../../providers/auth_providers.dart' show apiClientProvider;
-import '../../services/download_service_impl.dart';
+import '../../providers/zip_job_provider.dart';
+
 
 /// Admin-only Folder Details — reached by tapping a folder anywhere in
 /// the Folders flow (root list, or another folder's sub-folder list).
@@ -103,10 +103,27 @@ class _FolderDetailsScreenState extends ConsumerState<FolderDetailsScreen> {
         title: folder.name,
         showBack: true,
         actions: [
+          ...faceSearchActions(
+            context,
+            ref,
+            folderId: folder.id,
+            scopeLabel: folder.name,
+          ),
           IconButton(
             tooltip: 'Download Folder as ZIP',
-            onPressed: () => _downloadFolderZip(context, ref, folder),
+            onPressed: () => _queueFolderZip(context, ref, folder),
             icon: const Icon(Icons.archive_outlined),
+          ),
+          IconButton(
+            tooltip: 'Share Gallery Link',
+            onPressed: () => Navigator.of(context).pushNamed(
+              AppRoutes.folderShareSettings,
+              arguments: {
+                'folderId': folder.id,
+                'folderName': folder.name,
+              },
+            ),
+            icon: const Icon(Icons.link_rounded),
           ),
           IconButton(
             tooltip: 'Share with Client',
@@ -443,33 +460,29 @@ class _FolderDetailsScreenState extends ConsumerState<FolderDetailsScreen> {
     );
   }
 
-  Future<void> _downloadFolderZip(
+  Future<void> _queueFolderZip(
       BuildContext context, WidgetRef ref, FolderModel folder) async {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Preparing ZIP file, this may take a while...')),
-    );
-
     try {
-      final apiClient = ref.read(apiClientProvider);
-      final bytes = await apiClient.getBytes('/folders/${folder.id}/zip');
-
-      const downloadService = DownloadServiceImpl();
-      final success = await downloadService.downloadBytes(
-        context: context,
-        bytes: Uint8List.fromList(bytes),
-        fileName: '${folder.name.replaceAll(' ', '_')}.zip',
-      );
-
-      if (success) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Folder ZIP download complete.')),
-        );
-      }
-    } catch (e) {
-      messenger.showSnackBar(
+      await ref.read(zipJobsProvider.notifier).createJob(
+            kind: 'zip_folder',
+            targetId: folder.id,
+          );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to download ZIP: $e'),
+          content: const Text('ZIP job queued! Track progress in Downloads.'),
+          action: SnackBarAction(
+            label: 'View',
+            onPressed: () =>
+                Navigator.of(context).pushNamed(AppRoutes.zipJobs),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not queue ZIP: $e'),
           backgroundColor: AppColors.error,
         ),
       );

@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -20,7 +20,13 @@ import '../../core/theme/theme_context.dart';
 /// - Landing -> Upload
 /// - Continue -> Scan Progress -> Results
 class FaceSearchUploadScreen extends StatefulWidget {
-  const FaceSearchUploadScreen({super.key});
+  /// When set, the matching picker (gallery or camera) opens
+  /// immediately — so "Upload Photo" / "Take Photo" on the landing
+  /// screen do what their labels say instead of both landing on the
+  /// same empty screen.
+  final ImageSource? initialSource;
+
+  const FaceSearchUploadScreen({super.key, this.initialSource});
 
   @override
   State<FaceSearchUploadScreen> createState() => _FaceSearchUploadScreenState();
@@ -29,19 +35,44 @@ class FaceSearchUploadScreen extends StatefulWidget {
 class _FaceSearchUploadScreenState extends State<FaceSearchUploadScreen> {
   final ImagePicker _picker = ImagePicker();
   XFile? _pickedFile;
+  Uint8List? _previewBytes;
+
+  @override
+  void initState() {
+    super.initState();
+    final source = widget.initialSource;
+    if (source != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        source == ImageSource.camera ? _captureFromCamera() : _pickFromGallery();
+      });
+    }
+  }
+
+  Future<void> _setPicked(XFile file) async {
+    // Read bytes instead of using Image.file(File(path)): `dart:io` File
+    // doesn't exist on Flutter web (path is a blob: URL there), which
+    // made this preview throw on web.
+    final bytes = await file.readAsBytes();
+    if (!mounted) return;
+    setState(() {
+      _pickedFile = file;
+      _previewBytes = bytes;
+    });
+  }
 
   Future<void> _pickFromGallery() async {
     final file = await _picker.pickImage(source: ImageSource.gallery);
     if (!mounted) return;
     if (file == null) return;
-    setState(() => _pickedFile = file);
+    await _setPicked(file);
   }
 
   Future<void> _captureFromCamera() async {
     final file = await _picker.pickImage(source: ImageSource.camera);
     if (!mounted) return;
     if (file == null) return;
-    setState(() => _pickedFile = file);
+    await _setPicked(file);
   }
 
   void _replaceImage() {
@@ -50,7 +81,10 @@ class _FaceSearchUploadScreenState extends State<FaceSearchUploadScreen> {
   }
 
   void _removeImage() {
-    setState(() => _pickedFile = null);
+    setState(() {
+      _pickedFile = null;
+      _previewBytes = null;
+    });
   }
 
   void _continue() {
@@ -71,7 +105,10 @@ class _FaceSearchUploadScreenState extends State<FaceSearchUploadScreen> {
         showBack: true,
       ),
       body: SafeArea(
-        child: Column(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Column(
           children: [
             Expanded(
               child: ListView(
@@ -96,6 +133,8 @@ class _FaceSearchUploadScreenState extends State<FaceSearchUploadScreen> {
               ),
             ),
           ],
+        ),
+          ),
         ),
       ),
     );
@@ -151,10 +190,9 @@ class _FaceSearchUploadScreenState extends State<FaceSearchUploadScreen> {
             borderRadius: BorderRadius.circular(AppRadius.lg),
             child: AspectRatio(
               aspectRatio: 1,
-              child: Image.file(
-                File(_pickedFile!.path),
-                fit: BoxFit.cover,
-              ),
+              child: _previewBytes == null
+                  ? const Center(child: CircularProgressIndicator())
+                  : Image.memory(_previewBytes!, fit: BoxFit.cover),
             ),
           ),
         ],

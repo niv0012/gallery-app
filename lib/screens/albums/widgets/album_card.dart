@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -151,68 +153,122 @@ class AlbumCard extends ConsumerWidget {
       String? coverUrl,
       required int photoCount,
       required int videoCount}) {
-    final titleColor = isDark ? AppColors.textOnDark : AppColors.text;
-    final subtitleColor =
-        isDark ? AppColors.subtitleOnDark : AppColors.subtitle;
-    // mainAxisSize.min + a fixed gap (instead of a Spacer) so the
-    // bottom row sits right under the text instead of being pushed to
-    // the bottom of a tall grid cell, which is what was leaving a big
-    // empty gap in the middle of every card.
-    return Padding(
-      padding: EdgeInsets.all(AppSpacing.md),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return LayoutBuilder(builder: (context, constraints) {
+      final isSmall = constraints.maxWidth < 120;
+      
+      return Stack(
+        fit: StackFit.expand,
         children: [
-          AspectRatio(
-            aspectRatio: 4 / 3,
+          // Full background image
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            child: coverUrl != null
+                ? Image.network(
+                    coverUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) =>
+                        AlbumCoverPlaceholder(gradient: album.gradient),
+                  )
+                : AlbumCoverPlaceholder(
+                    gradient: album.gradient,
+                  ),
+          ),
+          // Gradient overlay for top button readability
+          if (!isSmall)
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.black.withValues(alpha: 0.35),
+                      Colors.transparent,
+                    ],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: const [0.0, 0.4],
+                  ),
+                ),
+              ),
+            ),
+          // Frosted Glass Bottom Panel
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              child: coverUrl != null
-                  ? Image.network(
-                      coverUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) =>
-                          AlbumCoverPlaceholder(gradient: album.gradient),
-                    )
-                  : AlbumCoverPlaceholder(
-                      gradient: album.gradient,
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(AppRadius.lg)),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                child: Container(
+                  padding: EdgeInsets.all(isSmall ? 8 : AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    border: Border(
+                      top: BorderSide(color: Colors.white.withValues(alpha: 0.15), width: 0.5),
                     ),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        album.name,
+                        maxLines: isSmall ? 1 : 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: isSmall ? 12 : 15,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          height: 1.2,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      if (!isSmall) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          '$photoCount photos • $videoCount videos',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withValues(alpha: 0.75),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
-          SizedBox(height: 8),
-          Text(
-            album.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: titleColor,
+          // Floating action menu at top right
+          if (!isSmall)
+            Positioned(
+              top: 8,
+              left: 8,
+              right: 4,
+              child: _BottomRow(
+                isDark: true, // Forcing dark mode ensures white icons
+                isFavorite: album.isFavorite,
+                onToggleFavorite: onToggleFavorite,
+                onEdit: onEdit,
+                onMove: onMove,
+                onDelete: onDelete,
+                isOverlay: true,
+              ),
             ),
-          ),
-          SizedBox(height: 3),
-          Text(
-            '$photoCount photos • $videoCount videos',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 12,
-              color: subtitleColor,
+          // Simple heart for small cards if favorited
+          if (isSmall && album.isFavorite)
+            const Positioned(
+              top: 6,
+              right: 6,
+              child: Icon(Icons.favorite_rounded, color: AppColors.accent, size: 14),
             ),
-          ),
-          SizedBox(height: 4),
-          _BottomRow(
-            isDark: isDark,
-            isFavorite: album.isFavorite,
-            onToggleFavorite: onToggleFavorite,
-            onEdit: onEdit,
-            onMove: onMove,
-            onDelete: onDelete,
-          ),
         ],
-      ),
-    );
+      );
+    });
   }
 }
 
@@ -226,6 +282,7 @@ class _BottomRow extends StatelessWidget {
     this.onEdit,
     this.onMove,
     this.onDelete,
+    this.isOverlay = false,
   });
 
   final bool isDark;
@@ -234,11 +291,12 @@ class _BottomRow extends StatelessWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onMove;
   final VoidCallback? onDelete;
+  final bool isOverlay;
 
   @override
   Widget build(BuildContext context) {
     final hasMenu = onEdit != null || onMove != null || onDelete != null;
-    final iconColor = isDark ? AppColors.subtitleOnDark : AppColors.subtitle;
+    final iconColor = isOverlay ? Colors.white : (isDark ? AppColors.subtitleOnDark : AppColors.subtitle);
 
     return Row(
       children: [

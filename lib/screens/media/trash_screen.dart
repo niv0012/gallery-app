@@ -5,9 +5,11 @@ import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/media_format_utils.dart';
 import '../../models/media_model.dart';
+import '../../models/trash_item.dart';
 import '../../providers/trash_provider.dart';
 import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/grid_columns_button.dart';
+import '../../widgets/common/pinch_zoom_grid.dart';
 import '../../widgets/media/media_thumb.dart';
 import '../../widgets/common/delete_confirmation_dialog.dart';
 import '../../widgets/common/snackbar_helper.dart';
@@ -27,19 +29,19 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final deletedMedia = ref.watch(trashProvider);
+    final items = ref.watch(trashProvider);
 
     return Scaffold(
       appBar: CustomAppBar(
         title: 'Trash',
         showBack: true,
         actions: [
-          if (deletedMedia.isNotEmpty)
+          if (items.isNotEmpty)
             GridColumnsButton(
               columns: _columns ?? _calculateCrossAxisCount(MediaQuery.sizeOf(context).width),
               onChanged: (c) => setState(() => _columns = c),
             ),
-          if (deletedMedia.isNotEmpty)
+          if (items.isNotEmpty)
             TextButton(
               onPressed: () => _confirmEmptyTrash(context, ref),
               child: Text(
@@ -52,27 +54,35 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
             ),
         ],
       ),
-      body: deletedMedia.isEmpty
+      body: items.isEmpty
           ? _buildEmptyState(context)
           : LayoutBuilder(
               builder: (context, constraints) {
                 final crossAxisCount =
                     _columns ?? _calculateCrossAxisCount(constraints.maxWidth);
-                return GridView.builder(
-                  padding: EdgeInsets.all(AppSpacing.md),
-                  physics: const BouncingScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossAxisCount,
-                    crossAxisSpacing: AppSpacing.md,
-                    mainAxisSpacing: AppSpacing.md,
-                    childAspectRatio: crossAxisCount == 1 ? 1.5 : 0.8,
-                  ),
-                  itemCount: deletedMedia.length,
-                  itemBuilder: (context, index) {
-                    final media = deletedMedia[index];
-                    return _TrashItemCard(
-                        media: media, compact: crossAxisCount >= 4);
+                return PinchZoomGrid(
+                  onZoomIn: () {
+                    if (crossAxisCount > 1) setState(() => _columns = crossAxisCount - 1);
                   },
+                  onZoomOut: () {
+                    if (crossAxisCount < 8) setState(() => _columns = crossAxisCount + 1);
+                  },
+                  child: GridView.builder(
+                    padding: EdgeInsets.all(AppSpacing.md),
+                    physics: const BouncingScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
+                      crossAxisSpacing: AppSpacing.md,
+                      mainAxisSpacing: AppSpacing.md,
+                      childAspectRatio: crossAxisCount == 1 ? 1.5 : 0.8,
+                    ),
+                    itemCount: items.length,
+                    itemBuilder: (context, index) {
+                      final item = items[index];
+                      return _TrashItemCard(
+                          item: item, compact: crossAxisCount >= 4);
+                    },
+                  ),
                 );
               },
             ),
@@ -148,18 +158,16 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
 }
 
 class _TrashItemCard extends ConsumerWidget {
-  final MediaModel media;
+  final TrashItem item;
 
   /// Dense grids (4+ columns) show an icon-only Restore button so the
   /// action row doesn't overflow the narrow tile.
   final bool compact;
 
-  const _TrashItemCard({required this.media, this.compact = false});
+  const _TrashItemCard({required this.item, this.compact = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sizeStr = MediaFormatUtils.formatFileSize(media.size);
-
     return Container(
       decoration: BoxDecoration(
         color: (Theme.of(context).brightness == Brightness.dark
@@ -198,7 +206,7 @@ class _TrashItemCard extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      media.type == MediaType.photo ? 'PHOTO' : 'VIDEO',
+                      _getTypeLabel(),
                       style: TextStyle(
                           color: Colors.white,
                           fontSize: 9,
@@ -219,7 +227,7 @@ class _TrashItemCard extends ConsumerWidget {
                           IconButton(
                             tooltip: 'Restore',
                             onPressed: () =>
-                                ref.read(trashProvider.notifier).restore(media.id),
+                                ref.read(trashProvider.notifier).restore(item.id),
                             style: IconButton.styleFrom(
                               backgroundColor: Colors.white,
                               foregroundColor: AppColors.primary,
@@ -235,7 +243,7 @@ class _TrashItemCard extends ConsumerWidget {
                         else
                         ElevatedButton.icon(
                           onPressed: () =>
-                              ref.read(trashProvider.notifier).restore(media.id),
+                              ref.read(trashProvider.notifier).restore(item.id),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white,
                             foregroundColor: AppColors.primary,
@@ -252,21 +260,23 @@ class _TrashItemCard extends ConsumerWidget {
                               style: TextStyle(
                                   fontSize: 10.5, fontWeight: FontWeight.bold)),
                         ),
-                        SizedBox(width: compact ? 4 : 8),
-                        IconButton(
-                          onPressed: () =>
-                              _confirmDeletePermanently(context, ref),
-                          style: IconButton.styleFrom(
-                            backgroundColor: Colors.red.withValues(alpha: 0.2),
-                            foregroundColor: Colors.redAccent,
-                            minimumSize: const Size(24, 24),
-                            padding: const EdgeInsets.all(4),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(6)),
+                        if (item is TrashedMediaItem) ...[
+                          SizedBox(width: compact ? 4 : 8),
+                          IconButton(
+                            onPressed: () =>
+                                _confirmDeletePermanently(context, ref),
+                            style: IconButton.styleFrom(
+                              backgroundColor: Colors.red.withValues(alpha: 0.2),
+                              foregroundColor: Colors.redAccent,
+                              minimumSize: const Size(24, 24),
+                              padding: const EdgeInsets.all(4),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(6)),
+                            ),
+                            icon: Icon(Icons.delete_forever_rounded, size: 14),
                           ),
-                          icon: Icon(Icons.delete_forever_rounded, size: 14),
-                        ),
+                        ]
                       ],
                     ),
                   ),
@@ -280,7 +290,7 @@ class _TrashItemCard extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  media.fileName,
+                  item.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -292,7 +302,7 @@ class _TrashItemCard extends ConsumerWidget {
                 ),
                 SizedBox(height: 2),
                 Text(
-                  sizeStr,
+                  _getSubLabel(),
                   style: TextStyle(
                       color: (Theme.of(context).brightness == Brightness.dark
                           ? AppColors.subtitleOnDark
@@ -308,24 +318,61 @@ class _TrashItemCard extends ConsumerWidget {
     );
   }
 
-  /// Shared thumbnail widget: handles local files, backend `file_url` /
-  /// `thumbnail_url`, videos and the gradient placeholder. The old
-  /// `Image.file`-only code showed nothing for API-sourced media.
-  Widget _buildThumbnail() => MediaThumb(media: media);
+  String _getTypeLabel() {
+    final i = item;
+    if (i is TrashedMediaItem) {
+      return i.media.type == MediaType.photo ? 'PHOTO' : 'VIDEO';
+    } else if (i is TrashedFolderItem) {
+      return 'FOLDER';
+    } else if (i is TrashedAlbumItem) {
+      return 'ALBUM';
+    }
+    return '';
+  }
+
+  String _getSubLabel() {
+    final i = item;
+    if (i is TrashedMediaItem) {
+      return MediaFormatUtils.formatFileSize(i.media.size);
+    } else if (i is TrashedFolderItem) {
+      return '${i.daysLeft} days left';
+    } else if (i is TrashedAlbumItem) {
+      return '${i.daysLeft} days left';
+    }
+    return '';
+  }
+
+  Widget _buildThumbnail() {
+    final i = item;
+    if (i is TrashedMediaItem) {
+      return MediaThumb(media: i.media);
+    } else if (i is TrashedFolderItem) {
+      return Container(
+        color: AppColors.primary.withValues(alpha: 0.1),
+        child: const Icon(Icons.folder_rounded, size: 48, color: AppColors.primary),
+      );
+    } else if (i is TrashedAlbumItem) {
+      return Container(
+        color: AppColors.secondary.withValues(alpha: 0.1),
+        child: const Icon(Icons.photo_album_rounded, size: 48, color: AppColors.secondary),
+      );
+    }
+    return const SizedBox();
+  }
 
   void _confirmDeletePermanently(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDeleteConfirmationDialog(
       context: context,
       title: 'Delete item?',
       message:
-          'Do you want to permanently delete "${media.fileName}"? This cannot be undone.',
+          'Do you want to permanently delete "${item.name}"? This cannot be undone.',
     );
     if (!context.mounted) return;
     if (confirmed) {
-      await ref.read(trashProvider.notifier).deletePermanently(media.id);
+      await ref.read(trashProvider.notifier).deletePermanently(item.id);
       if (context.mounted) {
         SnackBarHelper.showSuccess(
-            context, '"${media.fileName}" permanently deleted');
+            context, '"${item.name}" permanently deleted');
       }
     }
   }

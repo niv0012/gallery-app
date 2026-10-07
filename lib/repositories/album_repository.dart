@@ -1,6 +1,8 @@
 import '../core/network/api_client.dart';
 import '../core/utils/app_exceptions.dart';
 import '../models/album_model.dart';
+import '../models/delete_preview_model.dart';
+import '../models/trash_item.dart';
 
 abstract class AlbumRepository {
   Future<List<AlbumModel>> fetchAlbums();
@@ -14,74 +16,20 @@ abstract class AlbumRepository {
   Future<AlbumModel> updateAlbum(AlbumModel album);
 
   /// Removes an album. Throws [NotFoundException] if it no longer exists.
-  Future<void> deleteAlbum(String id);
+  Future<void> deleteAlbum(String id, {DeleteMode mode = DeleteMode.moveUp});
+
+  Future<DeletePreviewResponse> previewDeleteAlbum(String id, {DeleteMode mode = DeleteMode.moveUp});
+  
+  Future<List<TrashedAlbumItem>> fetchDeletedAlbums();
+  Future<void> restoreAlbum(String id);
 }
 
-/// Pure in-memory repository with lightweight simulated latency.
-///
-/// No network, no db, no local persistence (per brief). Starts with an
-/// EMPTY collection — no seed/demo/placeholder albums — and acts as the
-/// single mutable source of truth for albums so create/update/delete
-/// survive across `AlbumListController` rebuilds within the same app
-/// session. Swapping this for a real backend (Firebase/REST/etc.) later
-/// means writing one new class that implements [AlbumRepository] and
-/// wiring it into `albumRepositoryProvider` — no screen changes needed.
-class InMemoryAlbumRepository implements AlbumRepository {
-  InMemoryAlbumRepository({this.latency = const Duration(milliseconds: 520)});
-
-  final Duration latency;
-
-  final List<AlbumModel> _albums = [];
-
-  @override
-  Future<List<AlbumModel>> fetchAlbums() async {
-    await Future.delayed(latency);
-    // Return a copy so callers can't mutate our internal list by
-    // accident (they must go through create/update/delete).
-    return List<AlbumModel>.from(_albums);
-  }
-
-  @override
-  Future<AlbumModel> createAlbum(AlbumModel album) async {
-    await Future.delayed(latency ~/ 2);
-    _albums.add(album);
-    return album;
-  }
-
-  @override
-  Future<AlbumModel> updateAlbum(AlbumModel album) async {
-    await Future.delayed(latency ~/ 2);
-    final idx = _albums.indexWhere((a) => a.id == album.id);
-    if (idx == -1) {
-      throw NotFoundException('Album "${album.id}" no longer exists');
-    }
-    _albums[idx] = album;
-    return album;
-  }
-
-  @override
-  Future<void> deleteAlbum(String id) async {
-    await Future.delayed(latency ~/ 2);
-    final existed = _albums.any((a) => a.id == id);
-    if (!existed) {
-      throw NotFoundException('Album "$id" no longer exists');
-    }
-    _albums.removeWhere((a) => a.id == id);
-  }
-}
 
 /// API-backed [AlbumRepository], talking to `app/api/routes/albums.py`
-/// (`GET/POST/PATCH/DELETE /albums`) via [ApiClient] — the real
-/// counterpart [InMemoryAlbumRepository]'s doc comment already
-/// anticipated ("writing one new class that implements
-/// [AlbumRepository] and wiring it into `albumRepositoryProvider`").
+/// (`GET/POST/PATCH/DELETE /albums`) via [ApiClient].
 ///
 /// Every album/folder created against this repository is a real row on
-/// the server, with a real server-generated UUID `id` — unlike
-/// [InMemoryAlbumRepository]'s client-side placeholder ids (e.g.
-/// `al-<timestamp>`), which are never valid UUIDs and make any
-/// downstream call that expects a UUID (like `POST /media/upload`'s
-/// `album_id` query param) fail server-side validation.
+/// the server, with a real server-generated UUID `id`.
 class ApiAlbumRepository implements AlbumRepository {
   ApiAlbumRepository({required ApiClient apiClient}) : _apiClient = apiClient;
 
@@ -96,7 +44,7 @@ class ApiAlbumRepository implements AlbumRepository {
 
   @override
   Future<List<AlbumModel>> fetchAlbums() async {
-    final json = await _apiClient.get('/albums');
+    final json = await _apiClient.get('/albums', receiveTimeout: const Duration(seconds: 30));
     return _mapList(json);
   }
 
@@ -129,22 +77,32 @@ class ApiAlbumRepository implements AlbumRepository {
   }
 
   @override
-  Future<void> deleteAlbum(String id) async {
-    // Both delete-confirmation dialogs in the UI (Albums List, Edit
-    // Album) already warn the user up front — "This will permanently
-    // remove ... and its N photos. This can't be undone." — i.e. the
-    // app's contract is a cascade delete, not a rejection. The backend
-    // mirrors that via `force=true` (default `force=false` returns 409
-    // if the album still has active media, as a safety net for callers
-    // that *don't* pre-warn); since this repo's callers already do,
-    // always pass it.
+  Future<void> deleteAlbum(String id, {DeleteMode mode = DeleteMode.moveUp}) async {
     try {
-      await _apiClient.delete('/albums/$id?force=true');
+      await _apiClient.delete('/albums/$id?mode=${mode.value}');
     } on ApiException catch (e) {
       if (e.statusCode == 404) {
         throw NotFoundException('Album "$id" no longer exists');
       }
       rethrow;
     }
+  }
+
+  @override
+  Future<DeletePreviewResponse> previewDeleteAlbum(String id, {DeleteMode mode = DeleteMode.moveUp}) async {
+    final json = await _apiClient.get('/albums/$id/delete-preview?mode=${mode.value}');
+    return DeletePreviewResponse.fromJson(json as Map<String, dynamic>);
+  }
+
+  @override
+  Future<List<TrashedAlbumItem>> fetchDeletedAlbums() async {
+    final json = await _apiClient.get('/albums/trash');
+    final list = json as List<dynamic>;
+    return list.map((e) => TrashedAlbumItem.fromJson(e as Map<String, dynamic>)).toList(growable: false);
+  }
+
+  @override
+  Future<void> restoreAlbum(String id) async {
+    await _apiClient.post('/albums/$id/restore', body: {});
   }
 }

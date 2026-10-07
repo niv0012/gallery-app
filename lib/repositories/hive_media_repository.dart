@@ -63,6 +63,28 @@ class HiveMediaRepository implements MediaRepository {
   }
 
   @override
+  Future<MediaPage> fetchMediaPage({
+    String? albumId,
+    String? folderId,
+    bool unfiledOnly = false,
+    MediaType? type,
+    bool favoritesOnly = false,
+    String? likedByClientId,
+    int? pageSize,
+    String? cursor,
+  }) async {
+    final list = await fetchMedia(
+      albumId: albumId,
+      folderId: folderId,
+      unfiledOnly: unfiledOnly,
+      type: type,
+      favoritesOnly: favoritesOnly,
+      likedByClientId: likedByClientId,
+    );
+    return MediaPage(data: list, cursor: null);
+  }
+
+  @override
   Future<List<MediaModel>> fetchMedia({
     String? albumId,
     String? folderId,
@@ -291,6 +313,25 @@ class HiveMediaRepository implements MediaRepository {
     final all = await _loadAll();
     all.removeWhere((m) => m.isDeleted);
     await _saveAll(all);
+  }
+
+  @override
+  Future<Map<String, int>> fetchMediaCounts() async {
+    final all = await _loadAll();
+    int photo = 0;
+    int video = 0;
+    int size = 0;
+    for (final m in all) {
+      if (m.isDeleted) continue;
+      if (m.type == MediaType.photo) photo++;
+      if (m.type == MediaType.video) video++;
+      size += m.size;
+    }
+    return {
+      'photo_count': photo,
+      'video_count': video,
+      'total_size_bytes': size,
+    };
   }
 
   // ---------------------------------------------------------------------

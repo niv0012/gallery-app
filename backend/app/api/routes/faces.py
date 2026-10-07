@@ -45,11 +45,11 @@ async def search_by_face(
     """
     if album_id is not None:
         album = db.get(Album, album_id)
-        if album is None or album.owner_id != current_user.id:
+        if album is None or album.owner_id != current_user.id or getattr(album, "deleted_at", None) is not None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found")
     if folder_id is not None:
         folder = db.get(Folder, folder_id)
-        if folder is None or folder.owner_id != current_user.id:
+        if folder is None or folder.owner_id != current_user.id or getattr(folder, "deleted_at", None) is not None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found")
 
     faces = await extract_query_faces(file)
@@ -87,7 +87,7 @@ def reindex_faces(
     """
     if album_id is not None:
         album = db.get(Album, album_id)
-        if album is None or album.owner_id != current_user.id:
+        if album is None or album.owner_id != current_user.id or getattr(album, "deleted_at", None) is not None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found")
 
     background_tasks.add_task(reindex_owner_media, current_user.id, album_id, force)
@@ -97,6 +97,7 @@ def reindex_faces(
 @router.get("/status", response_model=FaceIndexStatusRead)
 def face_index_status(
     album_id: uuid.UUID | None = None,
+    album_ids: list[uuid.UUID] = Query(default=[]),
     current_user: User = Depends(get_current_studio_user),
     db: Session = Depends(get_db),
 ) -> FaceIndexStatusRead:
@@ -107,6 +108,8 @@ def face_index_status(
     )
     if album_id is not None:
         photo_query = photo_query.where(Media.album_id == album_id)
+    elif album_ids:
+        photo_query = photo_query.where(Media.album_id.in_(album_ids))
     photo_ids = db.execute(photo_query).scalars().all()
 
     if not photo_ids:

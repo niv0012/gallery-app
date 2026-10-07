@@ -200,4 +200,10 @@ class AdminDashboardNotifier extends AsyncNotifier<AdminDashboardSnapshot> {
     await _repo.resetToSeedData();
     await refresh();
   }
+
+  void updateMediaCounts({required int photoCount, required int videoCount, required int totalSizeBytes}) {
+    // The snapshot does not expose individual media-count fields directly;
+    // trigger a background refresh so the dashboard stat cards stay in sync.
+    refresh();
+  }
 }

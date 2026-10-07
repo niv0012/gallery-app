@@ -26,7 +26,9 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.storage import delete_media_folder
 from app.db.session import SessionLocal
-from app.models.gallery import Media
+from app.models.gallery import Media, Album, Folder
+from app.api.routes.zip_jobs import run_zip_cleanup
+
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +62,7 @@ def run_auto_delete() -> int:
 
     deleted_count = 0
     error_count = 0
+    trash_deleted_count = 0
 
     db = SessionLocal()
     try:
@@ -86,6 +89,35 @@ def run_auto_delete() -> int:
                 )
                 error_count += 1
 
+        # Trash Purge: 30 days
+        trash_cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+        
+        old_trashed_media = db.execute(
+            select(Media).where(Media.deleted_at <= trash_cutoff)
+        ).scalars().all()
+        for media in old_trashed_media:
+            try:
+                delete_media_folder(media.owner_id, media.id)
+                db.delete(media)
+                trash_deleted_count += 1
+            except Exception:
+                logger.exception("[AUTO_DELETE] Failed to purge trashed media id=%s", media.id)
+                error_count += 1
+
+        old_trashed_albums = db.execute(
+            select(Album).where(Album.deleted_at <= trash_cutoff)
+        ).scalars().all()
+        for album in old_trashed_albums:
+            db.delete(album)
+            trash_deleted_count += 1
+
+        old_trashed_folders = db.execute(
+            select(Folder).where(Folder.deleted_at <= trash_cutoff)
+        ).scalars().all()
+        for folder in old_trashed_folders:
+            db.delete(folder)
+            trash_deleted_count += 1
+
         db.commit()
     except Exception:
         logger.exception("[AUTO_DELETE] Unhandled error during auto-delete sweep -- rolling back.")
@@ -94,11 +126,20 @@ def run_auto_delete() -> int:
         db.close()
 
     logger.info(
-        "[AUTO_DELETE] Sweep complete. Deleted: %d, Errors: %d",
+        "[AUTO_DELETE] Sweep complete. Retention Deleted: %d, Trash Purged: %d, Errors: %d",
         deleted_count,
+        trash_deleted_count,
         error_count,
     )
-    return deleted_count
+    
+    try:
+        zip_deleted = run_zip_cleanup()
+        if zip_deleted > 0:
+            logger.info("[AUTO_DELETE] Cleaned up %d expired/failed ZIP jobs.", zip_deleted)
+    except Exception:
+        logger.exception("[AUTO_DELETE] Error during ZIP cleanup.")
+
+    return deleted_count + trash_deleted_count
 
 
 async def auto_delete_loop() -> None:

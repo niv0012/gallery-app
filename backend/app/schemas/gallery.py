@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.models.gallery import MediaType
+from app.models.gallery import MediaType, ShareLinkKind
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -44,6 +44,8 @@ class FolderUpdate(BaseModel):
     is_hidden: bool | None = None
     is_favorite: bool | None = None
     gradient_argb: list[int] | None = None
+    allow_download: bool | None = None
+    show_watermark: bool | None = None
 
 
 class FolderRead(BaseModel):
@@ -56,12 +58,17 @@ class FolderRead(BaseModel):
     is_favorite: bool
     created_at: datetime
     updated_at: datetime
+    deleted_at: datetime | None = None
+    allow_download: bool | None = None
+    show_watermark: bool | None = None
+    has_share_link: bool = False
 
     # Computed, never stored — see Folder model docstring.
     album_count: int = 0
     photo_count: int = 0
     video_count: int = 0
     gradient_argb: list[int] = []
+    preview_thumbnails: list[str] = []
 
     @classmethod
     def from_model(
@@ -70,6 +77,8 @@ class FolderRead(BaseModel):
         album_count: int = 0,
         photo_count: int = 0,
         video_count: int = 0,
+        preview_thumbnails: list[str] | None = None,
+        has_share_link: bool = False,
     ) -> "FolderRead":
         return cls(
             id=folder.id,
@@ -79,10 +88,15 @@ class FolderRead(BaseModel):
             is_favorite=folder.is_favorite,
             created_at=folder.created_at,
             updated_at=folder.updated_at,
+            deleted_at=folder.deleted_at,
+            allow_download=folder.allow_download,
+            show_watermark=folder.show_watermark,
             album_count=album_count,
             photo_count=photo_count,
             video_count=video_count,
             gradient_argb=_split_csv(folder.gradient_argb),
+            preview_thumbnails=preview_thumbnails or [],
+            has_share_link=has_share_link,
         )
 
 
@@ -138,6 +152,7 @@ class AlbumRead(BaseModel):
     is_favorite: bool
     created_at: datetime
     updated_at: datetime
+    deleted_at: datetime | None = None
 
     # Computed, never stored — see Album model docstring.
     photo_count: int = 0
@@ -166,6 +181,7 @@ class AlbumRead(BaseModel):
             is_favorite=album.is_favorite,
             created_at=album.created_at,
             updated_at=album.updated_at,
+            deleted_at=album.deleted_at,
             photo_count=photo_count,
             video_count=video_count,
             folder_count=1 if album.folder_id else 0,
@@ -354,6 +370,17 @@ class MediaRead(BaseModel):
         )
 
 
+class MediaPageRead(BaseModel):
+    items: list[MediaRead]
+    total_count: int
+    next_cursor: str | None = None
+
+
+class MediaCountsRead(BaseModel):
+    total_photos: int
+    total_videos: int
+
+
 # ---------------------------------------------------------------------------
 # Share Links
 # ---------------------------------------------------------------------------
@@ -361,20 +388,45 @@ class MediaRead(BaseModel):
 
 class ShareLinkCreate(BaseModel):
     album_id: uuid.UUID | None = None
-    collection_id: uuid.UUID | None = None
+    source_folder_id: uuid.UUID | None = None
+    album_ids: list[uuid.UUID] | None = None
+    # Phase 6 additions
+    folder_ids: list[uuid.UUID] | None = None
+    include_all: bool = False
+    include_folder_items: bool = False
+    auto_include_new: bool = False
     client_id: uuid.UUID | None = None
     # Plain-text passcode from the studio, e.g. "1234" — hashed with
     # the same bcrypt helpers as user passwords before it ever touches
     # the DB (see core/security.py). Omit/None means the link is public.
     password: str | None = Field(default=None, min_length=4, max_length=100)
+    pin: str | None = Field(default=None, min_length=4, max_length=6, pattern="^[0-9]+$")
     expires_at: datetime | None = None
     allow_download: bool = True
     show_watermark: bool = False
+    kind: ShareLinkKind = ShareLinkKind.standard
 
     @model_validator(mode='after')
     def check_target(self) -> 'ShareLinkCreate':
-        if (self.album_id is None and self.collection_id is None) or (self.album_id is not None and self.collection_id is not None):
-            raise ValueError('Exactly one of album_id or collection_id must be provided')
+        targets = sum([
+            1 if self.album_id is not None else 0,
+            1 if self.source_folder_id is not None else 0,
+        ])
+        if targets != 1:
+            raise ValueError('Exactly one of album_id or source_folder_id must be provided')
+        # For folder links, at least one of album_ids, folder_ids, include_all,
+        # or include_folder_items must specify content.
+        if self.source_folder_id is not None:
+            has_content = (
+                self.include_all
+                or self.include_folder_items
+                or bool(self.album_ids)
+                or bool(self.folder_ids)
+            )
+            if not has_content:
+                raise ValueError(
+                    'Folder links require at least one of: include_all, include_folder_items, album_ids, or folder_ids'
+                )
         return self
 
 
@@ -383,11 +435,20 @@ class ShareLinkUpdate(BaseModel):
     clear_client: bool = False
     password: str | None = Field(default=None, min_length=4, max_length=100)
     clear_password: bool = False
+    pin: str | None = Field(default=None, min_length=4, max_length=6, pattern="^[0-9]+$")
+    clear_pin: bool = False
     expires_at: datetime | None = None
     clear_expiry: bool = False
     allow_download: bool | None = None
     show_watermark: bool | None = None
     is_revoked: bool | None = None
+    album_ids: list[uuid.UUID] | None = None
+    # Phase 6 additions
+    folder_ids: list[uuid.UUID] | None = None
+    include_all: bool | None = None
+    include_folder_items: bool | None = None
+    auto_include_new: bool | None = None
+    kind: ShareLinkKind | None = None
 
 
 class ShareLinkRead(BaseModel):
@@ -399,11 +460,19 @@ class ShareLinkRead(BaseModel):
 
     id: uuid.UUID
     album_id: uuid.UUID | None = None
-    collection_id: uuid.UUID | None = None
+    source_folder_id: uuid.UUID | None = None
+    auto_include_new: bool = False
+    album_ids: list[uuid.UUID] | None = None
+    # Phase 6
+    folder_ids: list[uuid.UUID] | None = None
+    include_all: bool = False
+    include_folder_items: bool = False
+    kind: ShareLinkKind
     token: str
     share_url: str
     client_id: uuid.UUID | None = None
     has_password: bool
+    has_pin: bool
     expires_at: datetime | None
     allow_download: bool
     show_watermark: bool
@@ -420,19 +489,36 @@ class ShareLinkRead(BaseModel):
     updated_at: datetime
 
     @classmethod
-    def from_model(cls, link) -> "ShareLinkRead":
+    def from_model(
+        cls,
+        link,
+        album_ids: list[uuid.UUID] | None = None,
+        folder_ids: list[uuid.UUID] | None = None,
+    ) -> "ShareLinkRead":
         from app.core.storage import build_share_url
 
         now = datetime.now(link.created_at.tzinfo) if link.created_at.tzinfo else datetime.utcnow()
         is_expired = link.expires_at is not None and link.expires_at <= now
+        
+        # backwards-compatibility: fallback to reading the ORM relationship if loaded
+        if album_ids is None and getattr(link, 'share_link_albums', None):
+            album_ids = [a.album_id for a in link.share_link_albums]
+            
         return cls(
             id=link.id,
             album_id=link.album_id,
-            collection_id=getattr(link, 'collection_id', None),
+            source_folder_id=getattr(link, 'source_folder_id', None),
+            auto_include_new=getattr(link, 'auto_include_new', False),
+            album_ids=album_ids,
+            folder_ids=folder_ids,
+            include_all=getattr(link, 'include_all', False),
+            include_folder_items=getattr(link, 'include_folder_items', False),
             token=link.token,
             share_url=build_share_url(link.token),
             client_id=link.client_id,
+            kind=getattr(link, 'kind', ShareLinkKind.standard),
             has_password=link.password_hash is not None,
+            has_pin=link.pin_hash is not None,
             expires_at=link.expires_at,
             allow_download=link.allow_download,
             show_watermark=link.show_watermark,
@@ -455,6 +541,7 @@ class PublicShareLinkUnlockRequest(BaseModel):
     """
 
     password: str | None = None
+    pin: str | None = None
     # Which media is being downloaded. Optional so the endpoint stays
     # backwards compatible, but omitting it means this download won't
     # get a Download History row — only the link's own counter bumps.
@@ -469,6 +556,22 @@ class PublicAlbumSummary(BaseModel):
     name: str
     description: str | None
     gradient_argb: list[int] = []
+
+
+class PublicFolderSummary(BaseModel):
+    """Lightweight folder info for the public shared gallery view."""
+    id: uuid.UUID
+    name: str
+    gradient_argb: list[int] = []
+    album_count: int = 0
+    item_count: int = 0
+
+
+class CurrentFolderInfo(BaseModel):
+    """Navigation context for the folder endpoint."""
+    id: uuid.UUID
+    name: str
+    parent_id: uuid.UUID | None = None
 
 
 class PublicCollectionSummary(BaseModel):
@@ -487,9 +590,14 @@ class PublicShareLinkRead(BaseModel):
     collection: PublicCollectionSummary | None = None
     media: list[MediaRead] | None = None
     albums: list[PublicAlbumSummary] | None = None
+    # Phase 6: folder navigation
+    folders: list[PublicFolderSummary] | None = None
+    current_folder: CurrentFolderInfo | None = None
     allow_download: bool
     show_watermark: bool
+    kind: ShareLinkKind
     requires_password: bool
+    requires_pin: bool
     studio_logo_url: str | None = None
 
 
@@ -499,8 +607,29 @@ class ShareLinkStatusRead(BaseModel):
     """
 
     requires_password: bool
+    requires_pin: bool
     is_active: bool
     client_id: uuid.UUID | None = None
+    kind: ShareLinkKind
+
+
+class PrivateLinkRequest(BaseModel):
+    media_ids: list[uuid.UUID]
+    email: str | None = None
+    phone: str | None = None
+
+class ShareLinkFavouriteRequest(BaseModel):
+    media_id: uuid.UUID
+    guest_identifier: str
+
+class ShareLinkAnalyticsRead(BaseModel):
+    views_count: int
+    downloads_count: int
+    face_searches_count: int
+    emails_submitted: int
+    favourites_count: int
+    favourites_breakdown: list[dict[str, int]]  # e.g., [{"media_id": "uuid", "count": 5}]
+    emails_captured: list[str]
 
 
 # ---------------------------------------------------------------------------
@@ -724,3 +853,39 @@ class MediaCommentRead(BaseModel):
             updated_at=comment.updated_at,
             user_full_name=user_full_name,
         )
+
+class FolderContentsRead(BaseModel):
+    folders: list[FolderRead]
+    albums: list[AlbumRead]
+    media: list[MediaRead]
+
+
+from enum import Enum
+class DeleteMode(str, Enum):
+    move_up = "move_up"
+    delete_all = "delete_all"
+
+class DeletePreviewResponse(BaseModel):
+    mode: DeleteMode
+    folders_affected: int
+    albums_affected: int
+    media_affected: int
+
+
+class RestoreResponse(BaseModel):
+    message: str
+    restored_to_root: bool = False
+
+
+class TrashedFolderRead(BaseModel):
+    id: uuid.UUID
+    name: str
+    deleted_at: datetime
+    days_left: int
+
+
+class TrashedAlbumRead(BaseModel):
+    id: uuid.UUID
+    name: str
+    deleted_at: datetime
+    days_left: int

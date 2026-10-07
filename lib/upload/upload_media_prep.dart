@@ -45,6 +45,9 @@ Future<List<int>> prepareMediaBytesForUpload(
   }
 
   if (contentType.startsWith('image/')) {
+    if (contentType == 'image/raw' || contentType.startsWith('image/x-')) {
+      return bytes; // Skip RAW formats (cannot be compressed by pure-Dart image package)
+    }
     return ref.read(imageCompressionServiceProvider).compress(bytes);
   }
 

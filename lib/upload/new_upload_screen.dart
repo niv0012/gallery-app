@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:photo_manager/photo_manager.dart' show PhotoManager, PermissionState;
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 
 import '../core/routes/app_routes.dart';
@@ -15,6 +16,59 @@ import 'new_upload_provider.dart';
 import 'upload_queue_provider.dart';
 import 'picked_file_info.dart';
 import '../widgets/common/anchored_dropdown_field.dart';
+
+/// Custom picker delegate that hides the "/maxAssets" part from the confirm
+/// button so it shows "Confirm (3)" instead of "Confirm (3/9007199254740992)".
+class _UnlimitedPickerDelegate
+    extends DefaultAssetPickerBuilderDelegate<DefaultAssetPickerProvider> {
+  _UnlimitedPickerDelegate({
+    required super.provider,
+    required super.initialPermission,
+    super.locale,
+  });
+
+  @override
+  Widget confirmButton(BuildContext context) {
+    return ListenableBuilder(
+      listenable: provider,
+      builder: (_, __) {
+        final p = provider;
+        final bool isSelectedNotEmpty = p.isSelectedNotEmpty;
+        final bool shouldAllowConfirm =
+            isSelectedNotEmpty || p.previousSelectedAssets.isNotEmpty;
+        return MaterialButton(
+          minWidth: shouldAllowConfirm ? 48 : 20,
+          height: appBarItemHeight,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          color: theme.colorScheme.secondary,
+          disabledColor: theme.splashColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(3),
+          ),
+          onPressed: shouldAllowConfirm
+              ? () => Navigator.maybeOf(context)?.maybePop(p.selectedAssets)
+              : null,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          child: Text(
+            isSelectedNotEmpty && !isSingleAssetMode
+                ? '${textDelegate.confirm} (${p.selectedAssets.length})'
+                : textDelegate.confirm,
+            style: TextStyle(
+              color: shouldAllowConfirm
+                  ? theme.textTheme.bodyLarge?.color
+                  : theme.textTheme.bodySmall?.color,
+              fontSize: 17,
+              fontWeight: FontWeight.normal,
+            ),
+            semanticsLabel: isSelectedNotEmpty && !isSingleAssetMode
+                ? '${semanticsTextDelegate.confirm} (${p.selectedAssets.length})'
+                : semanticsTextDelegate.confirm,
+          ),
+        );
+      },
+    );
+  }
+}
 
 /// New Upload Screen — Pick → Review → Options → hands off to queue → opens Hub.
 /// State is fully local via [newUploadProvider] (autoDispose) so a running upload
@@ -99,13 +153,6 @@ class _NewUploadScreenState extends ConsumerState<NewUploadScreen> {
           'mkv',
           'webm',
           '3gp',
-          'raw',
-          'arw',
-          'cr2',
-          'cr3',
-          'nef',
-          'orf',
-          'dng',
         ],
       );
 
@@ -172,12 +219,26 @@ class _NewUploadScreenState extends ConsumerState<NewUploadScreen> {
     setState(() => _isPicking = true);
 
     try {
-      final List<AssetEntity>? assets = await AssetPicker.pickAssets(
+      // Request permission first so we can pass it to the custom delegate.
+      final permission = await PhotoManager.requestPermissionExtend();
+      final provider = DefaultAssetPickerProvider(
+        requestType: RequestType.common,
+        maxAssets: double.maxFinite.toInt(),
+      );
+      final delegate = _UnlimitedPickerDelegate(
+        provider: provider,
+        initialPermission: permission,
+        locale: Localizations.maybeLocaleOf(context),
+      );
+      final List<AssetEntity>? assets =
+          await AssetPicker.pickAssetsWithDelegate<
+            AssetEntity, 
+            AssetPathEntity, 
+            DefaultAssetPickerProvider, 
+            _UnlimitedPickerDelegate
+          >(
         context,
-        pickerConfig: const AssetPickerConfig(
-          requestType: RequestType.common,
-          maxAssets: 500,
-        ),
+        delegate: delegate,
       );
 
       if (assets == null || assets.isEmpty) {
@@ -238,7 +299,12 @@ class _NewUploadScreenState extends ConsumerState<NewUploadScreen> {
         }
         name = MediaContentType.withExtension(name, contentType);
         final dotIdx = name.lastIndexOf('.');
-        final ext = dotIdx >= 0 ? name.substring(dotIdx + 1) : '';
+        final ext = dotIdx >= 0 ? name.substring(dotIdx + 1).toLowerCase() : '';
+
+        // Ignore RAW files completely
+        if (const {'cr2', 'cr3', 'nef', 'orf', 'arw', 'dng', 'raw'}.contains(ext)) {
+          continue;
+        }
 
         // Check for duplicates
         final isDuplicate = existingJobs

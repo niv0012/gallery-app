@@ -4,8 +4,7 @@ import '../models/search_data.dart';
 
 /// Wires the `/search` FastAPI endpoints (`app/api/routes/search.py`) up
 /// to [ApiClient] — same one-repository-per-router-group convention as
-/// [LegalRepository]/[ApiAlbumRepository]. Replaces
-/// [InMemorySearchRepository], which had no backend behind it at all.
+/// [LegalRepository]/[ApiAlbumRepository].
 class ApiSearchRepository implements SearchRepository {
   final ApiClient _apiClient;
 

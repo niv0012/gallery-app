@@ -234,6 +234,11 @@ class MediaListController extends ChangeNotifier {
     return out;
   }
 
+  String? _nextCursor;
+  bool _isLoadingMore = false;
+  bool get isLoadingMore => _isLoadingMore;
+  bool get hasMore => _nextCursor != null;
+
   Future<void> load() async {
     if (_isLoading) return;
     _isLoading = true;
@@ -244,17 +249,104 @@ class MediaListController extends ChangeNotifier {
     // The UI will still show the old data until the new data arrives.
     try {
       await _loadUiStateIfNeeded();
-      final media = await _repo.fetchMedia(
+      final page = await _repo.fetchMediaPage(
         likedByClientId: _likedByClientId,
+        pageSize: 200,
       );
 
+      _nextCursor = page.cursor;
+      // Keep photos adopted from outside the first page (face-search
+      // results being viewed) so an in-flight viewer doesn't lose them.
+      final pageIds = page.data.map((m) => m.id).toSet();
+      final carried = _allMedia.where((m) => !pageIds.contains(m.id)).toList();
       _allMedia
         ..clear()
-        ..addAll(media);
+        ..addAll(page.data)
+        ..addAll(carried.where((m) => !_deletedIds.contains(m.id)));
     } catch (e) {
       _lastError = e.toString();
     } finally {
       _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Ensures that up to `previewLimit` items for a specific album are
+  /// present in `_allMedia`. Used by AlbumDetailsScreen to guarantee
+  /// previews exist even if the album's media is older than the global top 200.
+  Future<void> ensureAlbumLoaded(String albumId, {int limit = 12}) async {
+    try {
+      final page = await _repo.fetchMediaPage(
+        albumId: albumId,
+        pageSize: limit,
+      );
+      bool changed = false;
+      for (final m in page.data) {
+        if (!_allMedia.any((x) => x.id == m.id)) {
+          _allMedia.add(m);
+          changed = true;
+        }
+      }
+      if (changed) {
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  // ---------------------------------------------------------------------
+  // Media opened from OUTSIDE the paged list (face-search results, etc.)
+  // ---------------------------------------------------------------------
+  //
+  // `_allMedia` is just the first page(s) of the library, so a photo
+  // reached via face search is usually NOT in it. Every mutation below
+  // (favorite, rename, move, copy, edit, delete) looks the item up here
+  // by id, so for such photos they silently did nothing / never updated
+  // the UI. [adoptMedia] registers those photos so all actions work.
+
+  final Set<String> _deletedIds = {};
+
+  /// Ids deleted during this app session (lets screens that hold their
+  /// own snapshot — e.g. face-search results — drop them).
+  Set<String> get deletedIds => Set.unmodifiable(_deletedIds);
+
+  MediaModel? byId(String id) {
+    final idx = _allMedia.indexWhere((m) => m.id == id);
+    return idx == -1 ? null : _allMedia[idx];
+  }
+
+  /// Adds any of [items] that aren't already in the list so that
+  /// favorite / rename / move / copy / edit / delete work on them.
+  void adoptMedia(Iterable<MediaModel> items) {
+    var changed = false;
+    for (final m in items) {
+      if (_deletedIds.contains(m.id)) continue;
+      if (!_allMedia.any((x) => x.id == m.id)) {
+        _allMedia.add(m);
+        changed = true;
+      }
+    }
+    if (changed) notifyListeners();
+  }
+
+  Future<void> loadMore() async {
+    if (_isLoadingMore || !hasMore) return;
+    _isLoadingMore = true;
+    notifyListeners();
+
+    try {
+      final page = await _repo.fetchMediaPage(
+        likedByClientId: _likedByClientId,
+        pageSize: 200,
+        cursor: _nextCursor,
+      );
+
+      _nextCursor = page.cursor;
+      final known = _allMedia.map((m) => m.id).toSet();
+      _allMedia.addAll(page.data.where((m) => !known.contains(m.id)));
+    } catch (e) {
+      _lastError = e.toString();
+    } finally {
+      _isLoadingMore = false;
       notifyListeners();
     }
   }
@@ -360,7 +452,7 @@ class MediaListController extends ChangeNotifier {
   // Favorites
   // ---------------------------------------------------------------------
 
-  Future<void> toggleFavorite(String id) async {
+  Future<void> toggleFavorite(String id, {MediaModel? fallbackMedia}) async {
     try {
       await _repo.toggleFavorite(id);
       final idx = _allMedia.indexWhere((m) => m.id == id);
@@ -539,6 +631,7 @@ class MediaListController extends ChangeNotifier {
         
         for (final id in chunk) {
           _allMedia.removeWhere((m) => m.id == id);
+          _deletedIds.add(id);
         }
         
         // Ensure UI updates to show it's not frozen
@@ -571,6 +664,7 @@ class MediaListController extends ChangeNotifier {
         modifiedAt: DateTime.now(),
       );
       await _repo.updateMedia(restored);
+      _deletedIds.remove(m.id);
 
       final idx = _allMedia.indexWhere((x) => x.id == m.id);
       if (idx == -1) {
@@ -594,21 +688,29 @@ class MediaListController extends ChangeNotifier {
   ///
   /// This is UI-driven (Phase 4 Selection Experience) and keeps business
   /// logic inside the controller.
-  Future<void> renameMediaById({
+  Future<MediaModel?> renameMediaById({
     required String mediaId,
     required String newFileName,
+    MediaModel? fallbackMedia,
   }) async {
     final desired = newFileName.trim();
-    if (desired.isEmpty) return;
+    if (desired.isEmpty) return null;
 
     // Preserve extension unless the caller already provided one.
     // We interpret "newFileName" as either:
     // - full name with extension, OR
     // - base name (extension will be preserved).
     final idx = _allMedia.indexWhere((m) => m.id == mediaId);
-    if (idx == -1) return;
+    
+    final MediaModel current;
+    if (idx != -1) {
+      current = _allMedia[idx];
+    } else if (fallbackMedia != null && fallbackMedia.id == mediaId) {
+      current = fallbackMedia;
+    } else {
+      return null;
+    }
 
-    final current = _allMedia[idx];
     final dot = desired.lastIndexOf('.');
     final hasExt = dot > 0 && dot != desired.length - 1;
 
@@ -616,11 +718,11 @@ class MediaListController extends ChangeNotifier {
     final finalName = hasExt ? desired : '$desired$extension';
 
     // Reject whitespace-only or unchanged renames.
-    if (finalName.trim().isEmpty) return;
-    if (finalName == current.fileName) return;
+    if (finalName.trim().isEmpty) return null;
+    if (finalName == current.fileName) return null;
 
     // Validate file name (basic): no path separators.
-    if (finalName.contains('/') || finalName.contains('\\')) return;
+    if (finalName.contains('/') || finalName.contains('\\')) return null;
 
     // Duplicate check within destination scope (albumId/folderId).
     final existingNames = _allMedia
@@ -631,7 +733,7 @@ class MediaListController extends ChangeNotifier {
         .map((m) => m.fileName)
         .toSet();
 
-    if (existingNames.contains(finalName)) return;
+    if (existingNames.contains(finalName)) return null;
 
     final updated = current.copyWith(
       fileName: finalName,
@@ -640,8 +742,11 @@ class MediaListController extends ChangeNotifier {
 
     await _repo.updateMedia(updated);
 
-    _allMedia[idx] = updated;
-    notifyListeners();
+    if (idx != -1) {
+      _allMedia[idx] = updated;
+      notifyListeners();
+    }
+    return updated;
   }
 
   String _extensionOf(String fileName) {

@@ -19,16 +19,18 @@ import '../../providers/settings_provider.dart';
 import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/empty_state_card.dart';
 import '../../widgets/common/loading_widget.dart';
-import '../../widgets/common/pinch_zoom_handler.dart';
+import '../../widgets/common/pinch_zoom_grid.dart';
 import '../../services/share_service_impl.dart';
 import '../../services/download_service_impl.dart';
 import '../../services/media_file_cache.dart';
+import '../../widgets/media/face_search_actions.dart';
 
 import 'media_details_screen.dart';
 import '../../widgets/media/edited_image.dart';
 import '../../widgets/media/video_fallback_thumbnail.dart';
 import 'media_batch_workflows.dart';
 import '../../widgets/media/media_thumb_badges.dart';
+import '../../widgets/media/media_thumb.dart';
 import '../../widgets/admin/fade_slide_in.dart';
 import '../../widgets/common/compact_anchored_dropdown.dart';
 import '../../core/theme/theme_context.dart';
@@ -197,7 +199,6 @@ class _MediaGridScreenState extends ConsumerState<MediaGridScreen>
   late _GalleryGroupMode _groupMode;
   final ScrollController _scrollController = ScrollController();
   int _visibleLimit = 120;
-  bool _loadingMore = false;
   int _gridColumns = 4;
 
   // GestureDetector-based scale tracking – works for both touch pinch
@@ -362,25 +363,13 @@ class _MediaGridScreenState extends ConsumerState<MediaGridScreen>
   void _resetPagination() {
     setState(() {
       _visibleLimit = 120;
-      _loadingMore = false;
     });
   }
 
   void _loadMoreMedia() {
-    if (_loadingMore) return;
-    final total = ref.read(mediaProvider).filteredMedia.length;
-    if (_visibleLimit >= total) return; // Loaded everything
-
-    setState(() => _loadingMore = true);
-
-    // Simulate lazy loading delay
-    Future.delayed(const Duration(milliseconds: 700), () {
-      if (!mounted) return;
-      setState(() {
-        _visibleLimit += 120;
-        _loadingMore = false;
-      });
-    });
+    final c = ref.read(mediaProvider);
+    if (c.isLoadingMore || !c.hasMore) return;
+    c.loadMore();
   }
 
   // Group media models by date of creation/modification, folder, or album.
@@ -828,7 +817,7 @@ class _MediaGridScreenState extends ConsumerState<MediaGridScreen>
   // Standard Grid View
   Widget _buildGridView(
       MediaListController c, List<MediaModel> media, int limit) {
-    final displayItems = media.take(limit).toList();
+    final displayItems = media;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -843,7 +832,7 @@ class _MediaGridScreenState extends ConsumerState<MediaGridScreen>
             crossAxisSpacing: AppSpacing.sm,
             childAspectRatio: 1,
           ),
-          itemCount: displayItems.length + (_loadingMore ? 1 : 0),
+          itemCount: displayItems.length + (c.isLoadingMore ? 1 : 0),
           itemBuilder: (context, i) {
             if (i == displayItems.length) {
               return Center(
@@ -870,14 +859,14 @@ class _MediaGridScreenState extends ConsumerState<MediaGridScreen>
     _GalleryGroupMode groupMode,
     _GalleryViewMode viewMode,
   ) {
-    final displayItems = media.take(limit).toList();
+    final displayItems = media;
     final grouped = _groupMedia(displayItems, groupMode);
     final groupKeys = grouped.keys.toList();
 
     return ListView.builder(
       controller: _scrollController,
       padding: EdgeInsets.symmetric(vertical: 16),
-      itemCount: groupKeys.length + (_loadingMore ? 1 : 0),
+      itemCount: groupKeys.length + (c.isLoadingMore ? 1 : 0),
       itemBuilder: (context, i) {
         if (i == groupKeys.length) {
           return Center(
@@ -998,12 +987,12 @@ class _MediaGridScreenState extends ConsumerState<MediaGridScreen>
   // List View
   Widget _buildListView(
       MediaListController c, List<MediaModel> media, int limit) {
-    final displayItems = media.take(limit).toList();
+    final displayItems = media;
 
     return ListView.builder(
       controller: _scrollController,
       padding: EdgeInsets.symmetric(vertical: 8),
-      itemCount: displayItems.length + (_loadingMore ? 1 : 0),
+      itemCount: displayItems.length + (c.isLoadingMore ? 1 : 0),
       itemBuilder: (context, i) {
         if (i == displayItems.length) {
           return Center(
@@ -1072,7 +1061,7 @@ class _MediaGridScreenState extends ConsumerState<MediaGridScreen>
   // Timeline View
   Widget _buildTimelineView(
       MediaListController c, List<MediaModel> media, int limit) {
-    final displayItems = media.take(limit).toList();
+    final displayItems = media;
     final grouped = _groupMedia(displayItems, _GalleryGroupMode.date);
     final dates = grouped.keys.toList();
 
@@ -1103,7 +1092,7 @@ class _MediaGridScreenState extends ConsumerState<MediaGridScreen>
                 sliver: _buildTimelineGridSliver(c, grouped[dates[i]]!, media),
               ),
             ],
-            if (_loadingMore)
+            if (c.isLoadingMore)
               const SliverToBoxAdapter(
                 child: Center(
                   child: Padding(
@@ -1265,6 +1254,13 @@ class _MediaGridScreenState extends ConsumerState<MediaGridScreen>
                 );
               },
             ),
+            ...faceSearchActions(
+              context,
+              ref,
+              albumId: widget.albumId,
+              folderId: widget.folderId,
+              scopeLabel: widget.albumId != null ? 'this album' : (widget.folderId != null ? 'this folder' : null),
+            ),
             if (widget.type == null && !widget.favoritesOnly)
               IconButton(
                 tooltip: 'Videos',
@@ -1292,9 +1288,9 @@ class _MediaGridScreenState extends ConsumerState<MediaGridScreen>
       ),
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 250),
-        child: c.isLoading
+        child: c.isLoading && media.isEmpty
             ? Center(child: LoadingWidget(message: c.loadingMessage))
-            : c.lastError != null
+            : c.lastError != null && media.isEmpty
                 ? Center(
                     child: _ErrorStateCard(
                       message: errorView ?? c.lastError!,
@@ -1609,38 +1605,14 @@ class _MediaGridScreenState extends ConsumerState<MediaGridScreen>
                                       'No media found for the current filters.',
                                 ),
                               )
-                            : PinchZoomHandler(
+                            : PinchZoomGrid(
                                 onZoomIn: _zoomIn,
                                 onZoomOut: _zoomOut,
-                                child: GestureDetector(
-                                  // GestureDetector onScaleUpdate works for both
-                                  // two-finger touch pinch AND trackpad pinch on web.
-                                  onScaleStart: (_) {
-                                    _scaleStartModeIndex =
-                                        _currentModeIndex.toDouble();
+                                child: RefreshIndicator(
+                                  onRefresh: () async {
+                                    await ref.read(mediaProvider).load();
+                                    _resetPagination();
                                   },
-                                  onScaleUpdate: (details) {
-                                    if (details.scale == 1.0) return;
-                                    final newLevel =
-                                        (_scaleStartModeIndex / details.scale)
-                                            .round()
-                                            .clamp(1, 3);
-                                    if (newLevel != _currentModeIndex) {
-                                      if (newLevel == 3) {
-                                        _changeViewMode(
-                                            _GalleryViewMode.timeline);
-                                      } else if (newLevel == 2) {
-                                        _changeViewMode(_GalleryViewMode.grid);
-                                      } else if (newLevel == 1) {
-                                        _changeViewMode(_GalleryViewMode.list);
-                                      }
-                                    }
-                                  },
-                                  child: RefreshIndicator(
-                                    onRefresh: () async {
-                                      await ref.read(mediaProvider).load();
-                                      _resetPagination();
-                                    },
                                     child: AnimatedSwitcher(
                                       duration:
                                           const Duration(milliseconds: 250),
@@ -1710,7 +1682,6 @@ class _MediaGridScreenState extends ConsumerState<MediaGridScreen>
                                     ),
                                   ),
                                 ),
-                              ),
                       ),
                     ],
                   ),
@@ -2397,51 +2368,13 @@ class _MediaThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final path = media.displayPath;
-    final isNetwork = media.isDisplayPathNetwork;
-    if (media.type == MediaType.photo) {
-      if (kIsWeb) {
-        final thumbnailPath = media.displayThumbnailPath;
-        if (thumbnailPath.startsWith('http://') ||
-            thumbnailPath.startsWith('https://')) {
-          return Image.network(
-            thumbnailPath,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => _placeholder(),
-          );
-        }
-      }
-      if (isNetwork ||
-          (!kIsWeb && path.isNotEmpty && File(path).existsSync())) {
-        return EditedImage(
-          media: media,
-          fit: BoxFit.cover,
-        );
-      }
-    } else {
-      final thumbPath = media.displayThumbnailPath;
-      final isThumbNetwork =
-          thumbPath.startsWith('http://') || thumbPath.startsWith('https://');
-      if (isThumbNetwork) {
-        return Image.network(
-          thumbPath,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) =>
-              VideoFallbackThumbnail(media: media, fit: BoxFit.cover),
-        );
-      } else if (!kIsWeb &&
-          thumbPath.isNotEmpty &&
-          File(thumbPath).existsSync()) {
-        return Image.file(
-          File(thumbPath),
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => _placeholder(),
-        );
-      }
+    if (media.type == MediaType.photo && media.editRecipe?.hasEdits == true) {
+      return EditedImage(
+        media: media,
+        fit: BoxFit.cover,
+      );
     }
-    return media.type == MediaType.video
-        ? VideoFallbackThumbnail(media: media, fit: BoxFit.cover)
-        : _placeholder();
+    return MediaThumb(media: media, fit: BoxFit.cover);
   }
 
   Widget _placeholder() {

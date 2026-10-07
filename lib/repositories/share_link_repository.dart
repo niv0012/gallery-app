@@ -27,10 +27,11 @@ class ShareLinkRepository {
   // ---------------------------------------------------------------------
 
   Future<List<GalleryShareLink>> fetchLinks(
-      {String? albumId, String? collectionId, bool activeOnly = false}) async {
+      {String? albumId, String? collectionId, String? folderId, bool activeOnly = false}) async {
     final query = <String>[];
     if (albumId != null) query.add('album_id=$albumId');
     if (collectionId != null) query.add('collection_id=$collectionId');
+    if (folderId != null) query.add('folder_id=$folderId');
     if (activeOnly) query.add('active_only=true');
     final path = '/share-links${query.isEmpty ? '' : '?${query.join('&')}'}';
     final json = await _apiClient.get(path);
@@ -40,6 +41,13 @@ class ShareLinkRepository {
   Future<GalleryShareLink> createLink({
     String? albumId,
     String? collectionId,
+    String? folderId,
+    List<String>? albumIds,
+    List<String>? folderIds,
+    bool includeAll = false,
+    bool includeFolderItems = false,
+    bool autoIncludeNew = false,
+    String kind = 'standard',
     String? clientId,
     String? password,
     DateTime? expiresAt,
@@ -49,6 +57,15 @@ class ShareLinkRepository {
     final body = {
       if (albumId != null) 'album_id': albumId,
       if (collectionId != null) 'collection_id': collectionId,
+      if (folderId != null) 'source_folder_id': folderId,
+      if (albumIds != null) 'album_ids': albumIds,
+      if (folderId != null) ...{
+        'auto_include_new': autoIncludeNew,
+        'include_all': includeAll,
+        'include_folder_items': includeFolderItems,
+        if (folderIds != null) 'folder_ids': folderIds,
+      },
+      'kind': kind,
       if (clientId != null && clientId.isNotEmpty) 'client_id': clientId,
       if (password != null && password.isNotEmpty) 'password': password,
       if (expiresAt != null) 'expires_at': expiresAt.toUtc().toIso8601String(),
@@ -77,6 +94,12 @@ class ShareLinkRepository {
     bool? allowDownload,
     bool? showWatermark,
     bool? isRevoked,
+    List<String>? albumIds,
+    List<String>? folderIds,
+    bool? includeAll,
+    bool? includeFolderItems,
+    bool? autoIncludeNew,
+    String? kind,
   }) async {
     final body = {
       if (clientId != null && clientId.isNotEmpty) 'client_id': clientId,
@@ -88,6 +111,12 @@ class ShareLinkRepository {
       if (allowDownload != null) 'allow_download': allowDownload,
       if (showWatermark != null) 'show_watermark': showWatermark,
       if (isRevoked != null) 'is_revoked': isRevoked,
+      if (albumIds != null) 'album_ids': albumIds,
+      if (folderIds != null) 'folder_ids': folderIds,
+      if (includeAll != null) 'include_all': includeAll,
+      if (includeFolderItems != null) 'include_folder_items': includeFolderItems,
+      if (autoIncludeNew != null) 'auto_include_new': autoIncludeNew,
+      if (kind != null) 'kind': kind,
     };
     final json = await _apiClient.patch('/share-links/$id', body: body);
     return GalleryShareLink.fromApiJson(json as Map<String, dynamic>);
@@ -95,6 +124,11 @@ class ShareLinkRepository {
 
   Future<void> deleteLink(String id) async {
     await _apiClient.delete('/share-links/$id');
+  }
+
+  Future<ShareLinkAnalyticsModel> fetchAnalytics(String id) async {
+    final json = await _apiClient.get('/share-links/$id/analytics');
+    return ShareLinkAnalyticsModel.fromApiJson(json as Map<String, dynamic>);
   }
 
   // ---------------------------------------------------------------------
@@ -125,12 +159,28 @@ class ShareLinkRepository {
     if (password != null && password.isNotEmpty) {
       query.add('password=${Uri.encodeComponent(password)}');
     }
-    
-    final path = albumId != null 
-        ? '/public/galleries/$token/albums/$albumId' 
+
+    final path = albumId != null
+        ? '/public/galleries/$token/albums/$albumId'
         : '/public/galleries/$token';
-        
+
     final url = '$path${query.isEmpty ? '' : '?${query.join('&')}'}';
+    final json = await _apiClient.get(url);
+    return PublicGalleryData.fromApiJson(json as Map<String, dynamic>);
+  }
+
+  /// Fetch the contents of a sub-folder within a folder share link.
+  Future<PublicGalleryData> fetchPublicFolder({
+    required String token,
+    required String folderId,
+    String? password,
+  }) async {
+    final query = <String>[];
+    if (password != null && password.isNotEmpty) {
+      query.add('password=${Uri.encodeComponent(password)}');
+    }
+    final url =
+        '/public/galleries/$token/folders/$folderId${query.isEmpty ? '' : '?${query.join('&')}'}';
     final json = await _apiClient.get(url);
     return PublicGalleryData.fromApiJson(json as Map<String, dynamic>);
   }
@@ -152,5 +202,57 @@ class ShareLinkRepository {
     };
     await _apiClient.post('/public/share-links/$token/download',
         body: body, withAuth: true);
+  }
+
+  Future<String> requestPrivateLink({
+    required String token,
+    required List<String> mediaIds,
+    String? password,
+  }) async {
+    final body = {
+      'media_ids': mediaIds,
+    };
+    final queryParams = <String, String>{};
+    if (password != null && password.isNotEmpty) {
+      queryParams['password'] = password;
+    }
+    
+    final queryStr = queryParams.isEmpty 
+        ? '' 
+        : '?${Uri(queryParameters: queryParams).query}';
+        
+    final response = await _apiClient.post(
+      '/public/share-links/$token/request-private-link$queryStr',
+      body: body,
+      withAuth: true,
+    );
+    
+    final json = response.data as Map<String, dynamic>;
+    return json['token'] as String;
+  }
+
+  Future<void> toggleFavourite({
+    required String token,
+    required String mediaId,
+    required String guestIdentifier,
+    String? password,
+  }) async {
+    final body = {
+      'media_id': mediaId,
+      'guest_identifier': guestIdentifier,
+    };
+    final queryParams = <String, String>{};
+    if (password != null && password.isNotEmpty) {
+      queryParams['password'] = password;
+    }
+    final queryStr = queryParams.isEmpty 
+        ? '' 
+        : '?${Uri(queryParameters: queryParams).query}';
+        
+    await _apiClient.post(
+      '/public/share-links/$token/favourites$queryStr',
+      body: body,
+      withAuth: true,
+    );
   }
 }

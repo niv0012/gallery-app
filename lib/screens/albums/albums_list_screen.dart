@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/routes/app_routes.dart';
+import '../../core/utils/responsive_utils.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/subscription_guard.dart';
 import '../../models/album_model.dart';
@@ -11,14 +13,17 @@ import '../../providers/album_provider.dart';
 import '../../providers/face_search_provider.dart';
 import '../../providers/folder_provider.dart';
 import '../../providers/media_provider.dart';
+import '../../providers/folder_explorer_provider.dart';
 import '../../widgets/common/custom_app_bar.dart';
 
 import '../../widgets/common/empty_state_card.dart';
 import '../../widgets/common/loading_widget.dart';
-import '../../widgets/common/anchored_dropdown_field.dart';
+import '../../widgets/common/compact_anchored_dropdown.dart';
+import '../../widgets/folders/safe_delete_dialog.dart';
 
 import 'widgets/album_card.dart';
 import '../media/media_grid_screen.dart' show MediaSearchArgs;
+import '../folders/folder_explorer_screen.dart';
 
 class AlbumsListScreen extends ConsumerStatefulWidget {
   const AlbumsListScreen({super.key});
@@ -30,6 +35,7 @@ class AlbumsListScreen extends ConsumerStatefulWidget {
 class _AlbumsListScreenState extends ConsumerState<AlbumsListScreen>
     with RouteAware {
   final _searchController = TextEditingController();
+  bool _showFolders = false;
 
   @override
   void didChangeDependencies() {
@@ -59,29 +65,16 @@ class _AlbumsListScreenState extends ConsumerState<AlbumsListScreen>
   }
 
   Future<void> _confirmDeleteAlbum(AlbumModel album) async {
-    final confirmed = await showDialog<bool>(
+    final albumRepo = ref.read(albumRepositoryProvider);
+    final mode = await showSafeDeleteDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Delete Album?'),
-        content: Text(
-            'This will permanently remove "${album.name}" and its ${album.photoCount} photos. This can\'t be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('Delete'),
-          ),
-        ],
-      ),
+      itemName: album.name,
+      getPreview: (mode) => albumRepo.previewDeleteAlbum(album.id, mode: mode),
     );
-    if (confirmed != true || !mounted) return;
+    if (mode == null || !mounted) return;
 
     try {
-      await ref.read(albumProvider).deleteAlbum(album.id);
+      await ref.read(albumProvider).deleteAlbum(album.id, mode: mode);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('"${album.name}" deleted')),
@@ -152,6 +145,38 @@ class _AlbumsListScreenState extends ConsumerState<AlbumsListScreen>
     }
   }
 
+  Widget _buildTab(BuildContext context, {required String title, required bool isSelected, required VoidCallback onTap}) {
+    final color = isSelected ? const Color(0xFF8A5FFC) : (Theme.of(context).brightness == Brightness.dark ? Colors.white54 : AppColors.subtitle);
+    
+    return InkWell(
+      onTap: onTap,
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.only(bottom: 12, top: 4, left: 4, right: 4),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: isSelected ? const Color(0xFF8A5FFC) : Colors.transparent,
+              width: 2,
+            ),
+          ),
+        ),
+        child: AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 200),
+          style: TextStyle(
+            color: color,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+            fontSize: 14,
+            letterSpacing: -0.2,
+            fontFamily: Theme.of(context).textTheme.bodyMedium?.fontFamily,
+          ),
+          child: Text(title),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final albumState = ref.watch(albumProvider);
@@ -159,49 +184,59 @@ class _AlbumsListScreenState extends ConsumerState<AlbumsListScreen>
 
     return Scaffold(
       appBar: CustomAppBar(
-        title: 'Albums',
+        title: 'Gallery',
+        centerTitle: true,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: Theme.of(context).brightness == Brightness.dark ? Colors.white12 : Colors.grey.withValues(alpha: 0.3),
+                  width: 1,
+                ),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: Row(
+                children: [
+                  _buildTab(context, title: 'Albums', isSelected: !_showFolders, onTap: () => setState(() => _showFolders = false)),
+                  const SizedBox(width: 24),
+                  _buildTab(context, title: 'Folders', isSelected: _showFolders, onTap: () => setState(() => _showFolders = true)),
+                ],
+              ),
+            ),
+          ),
+        ),
         showBack: false,
         actions: [
           IconButton(
             tooltip: 'Find by Face',
-            icon: Icon(Icons.face_retouching_natural_rounded),
+            icon: const Icon(Icons.face_retouching_natural_rounded),
             onPressed: () {
-              // Scopes the search to the studio's own library — mirrors
-              // POST /faces/search (owner-only), same backend endpoint
-              // the client-drawer's "Face Search" entry uses for
-              // useClientGallery(), just pointed at the studio's own
-              // photos instead of a client's shared galleries.
               ref.read(faceSearchProvider.notifier).useMyLibrary();
               Navigator.of(context).pushNamed(AppRoutes.faceSearchLanding);
             },
           ),
-          IconButton(
-            tooltip: 'Manage Collections',
-            icon: Icon(Icons.collections_bookmark_rounded),
-            onPressed: () {
-              Navigator.of(context).pushNamed(AppRoutes.collections);
-            },
-          ),
-          IconButton(
-            tooltip: 'Manage Folders',
-            icon: Icon(Icons.folder_rounded),
-            onPressed: () {
-              Navigator.of(context).pushNamed(AppRoutes.adminFolderList);
-            },
-          ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'albums_list_fab',
-        onPressed: () {
-          requireActiveSubscription(context, ref, () {
-            Navigator.of(context).pushNamed(AppRoutes.adminAlbumCreate);
-          });
-        },
-        icon: Icon(Icons.add_rounded),
-        label: Text('Create Album'),
-      ),
-      body: SafeArea(
+      floatingActionButton: _showFolders 
+          ? null
+          : FloatingActionButton.extended(
+              heroTag: 'albums_list_fab',
+              onPressed: () {
+                requireActiveSubscription(context, ref, () {
+                  Navigator.of(context).pushNamed(AppRoutes.adminAlbumCreate);
+                });
+              },
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Create Album'),
+            ),
+      body: _showFolders
+          ? const FolderExplorerScreen(isEmbedded: true)
+          : SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {
             await ref.read(albumProvider).load();
@@ -217,114 +252,139 @@ class _AlbumsListScreenState extends ConsumerState<AlbumsListScreen>
                   // Controls
                   Builder(
                     builder: (context) {
-                      // simple inline controls without additional widget dependency
-                      return Column(
-                        children: [
-                          TextField(
-                            controller: _searchController,
-                            onChanged: (v) {
-                              albumState.setSearchQuery(v);
-                            },
-                            decoration: InputDecoration(
-                              hintText: 'Search albums…',
-                              prefixIcon: Icon(Icons.search_rounded),
-                              suffixIcon: _searchController.text.isNotEmpty
-                                  ? IconButton(
-                                      icon: Icon(Icons.clear_rounded),
-                                      onPressed: () {
-                                        _searchController.clear();
-                                        albumState.setSearchQuery('');
-                                      },
-                                    )
-                                  : null,
-                            ),
-                          ),
-                          SizedBox(height: AppSpacing.md),
-                          Row(
+                      final isDark = Theme.of(context).brightness == Brightness.dark;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Expanded(
-                                child: AnchoredDropdownField<AlbumSortOption>(
-                                  value: albumState.sortOption,
-                                  items: const [
-                                    DropdownMenuItem(
-                                        value: AlbumSortOption.recent,
-                                        child: Text('Recent')),
-                                    DropdownMenuItem(
-                                        value: AlbumSortOption.name,
-                                        child: Text('Name')),
-                                    DropdownMenuItem(
-                                        value: AlbumSortOption.photoCount,
-                                        child: Text('Photo count')),
+                            Container(
+                              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.4),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: isDark ? AppColors.darkSurfaceRaised : Colors.white,
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(color: isDark ? Colors.white10 : Colors.grey.withValues(alpha: 0.15)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: CompactAnchoredDropdown<AlbumSortOption>(
+                                value: albumState.sortOption,
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: AlbumSortOption.recent,
+                                    child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.access_time_rounded, size: 16), SizedBox(width: 8), Flexible(child: Text('Recent', overflow: TextOverflow.ellipsis))]),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: AlbumSortOption.name,
+                                    child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.sort_by_alpha_rounded, size: 16), SizedBox(width: 8), Flexible(child: Text('Name', overflow: TextOverflow.ellipsis))]),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: AlbumSortOption.photoCount,
+                                    child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.photo_library_outlined, size: 16), SizedBox(width: 8), Flexible(child: Text('Photos', overflow: TextOverflow.ellipsis))]),
+                                  ),
+                                ],
+                                onChanged: (v) => albumState.setSortOption(v),
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: -0.2, color: isDark ? Colors.white : AppColors.text),
+                              ),
+                            ),
+                            if (!folderState.isLoading)
+                              Padding(
+                                padding: const EdgeInsets.only(left: AppSpacing.sm),
+                                child: Container(
+                                  constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.4),
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: isDark ? AppColors.darkSurfaceRaised : Colors.white,
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(color: isDark ? Colors.white10 : Colors.grey.withValues(alpha: 0.15)),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
                                   ],
-                                  onChanged: (v) {
-                                    if (v == null) return;
-                                    albumState.setSortOption(v);
-                                  },
-                                  decoration:
-                                      const InputDecoration(labelText: 'Sort'),
+                                ),
+                                child: CompactAnchoredDropdown<String?>(
+                                  key: ValueKey('folder_filter_${folderState.folders.length}'),
+                                  value: albumState.folderId,
+                                  items: [
+                                    const DropdownMenuItem<String?>(
+                                      value: null,
+                                      child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.grid_view_rounded, size: 16), SizedBox(width: 8), Flexible(child: Text('All Albums', overflow: TextOverflow.ellipsis))]),
+                                    ),
+                                    const DropdownMenuItem<String?>(
+                                      value: kUnfiledFolderSentinel,
+                                      child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.block_rounded, size: 16), SizedBox(width: 8), Flexible(child: Text('Unfiled', overflow: TextOverflow.ellipsis))]),
+                                    ),
+                                    ...folderState.folders.map(
+                                      (f) => DropdownMenuItem<String?>(
+                                        value: f.id,
+                                        child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.folder_outlined, size: 16), SizedBox(width: 8), Flexible(child: Text(f.name, overflow: TextOverflow.ellipsis))]),
+                                      ),
+                                    ),
+                                  ],
+                                  onChanged: albumState.setFolder,
+                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: -0.2, color: isDark ? Colors.white : AppColors.text),
                                 ),
                               ),
-                              SizedBox(width: AppSpacing.sm),
-                              IconButton.filledTonal(
-                                tooltip: albumState.isGrid
-                                    ? 'Switch to list view'
-                                    : 'Switch to grid view',
-                                onPressed: albumState.toggleGridList,
-                                icon: Icon(albumState.isGrid
-                                    ? Icons.grid_view_rounded
-                                    : Icons.view_list_rounded),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Container(
+                              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.4),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: isDark ? AppColors.darkSurfaceRaised : Colors.white,
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(color: isDark ? Colors.white10 : Colors.grey.withValues(alpha: 0.15)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                          SizedBox(height: AppSpacing.sm),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: folderState.isLoading
-                                    ? SizedBox.shrink()
-                                    : AnchoredDropdownField<String?>(
-                                        // key forces a rebuild when the folder
-                                        // list loads so the value stays in sync.
-                                        key: ValueKey(
-                                            'folder_filter_${folderState.folders.length}'),
-                                        value: albumState.folderId,
-                                        items: [
-                                          const DropdownMenuItem<String?>(
-                                            value: null,
-                                            child: Text('All folders'),
-                                          ),
-                                          const DropdownMenuItem<String?>(
-                                            value: kUnfiledFolderSentinel,
-                                            child: Text('Unfiled (no folder)'),
-                                          ),
-                                          ...folderState.folders.map(
-                                              (f) => DropdownMenuItem<String?>(
-                                                    value: f.id,
-                                                    child: Text(f.name),
-                                                  )),
-                                        ],
-                                        onChanged: albumState.setFolder,
-                                        decoration: const InputDecoration(
-                                          labelText: 'Filter folder',
-                                        ),
-                                      ),
+                              child: CompactAnchoredDropdown<ExplorerViewMode>(
+                                value: albumState.viewMode,
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: ExplorerViewMode.gridLarge,
+                                    child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.grid_view_rounded, size: 16), SizedBox(width: 8), Flexible(child: Text('Large icons', overflow: TextOverflow.ellipsis))]),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: ExplorerViewMode.gridMedium,
+                                    child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.grid_on_rounded, size: 16), SizedBox(width: 8), Flexible(child: Text('Medium icons', overflow: TextOverflow.ellipsis))]),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: ExplorerViewMode.gridSmall,
+                                    child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.apps_rounded, size: 16), SizedBox(width: 8), Flexible(child: Text('Small icons', overflow: TextOverflow.ellipsis))]),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: ExplorerViewMode.list,
+                                    child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.list_rounded, size: 16), SizedBox(width: 8), Flexible(child: Text('List', overflow: TextOverflow.ellipsis))]),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: ExplorerViewMode.details,
+                                    child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.view_list_rounded, size: 16), SizedBox(width: 8), Flexible(child: Text('Details', overflow: TextOverflow.ellipsis))]),
+                                  ),
+                                ],
+                                onChanged: (v) => albumState.setViewMode(v),
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: -0.2, color: isDark ? Colors.white : AppColors.text),
                               ),
-                              SizedBox(width: AppSpacing.sm),
-                              FilterChip(
-                                label: Text('Favorites'),
-                                selected: albumState.filterOption ==
-                                    AlbumFilterOption.favorites,
-                                onSelected: (v) {
-                                  albumState.setFilterOption(v
-                                      ? AlbumFilterOption.favorites
-                                      : AlbumFilterOption.all);
-                                },
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: AppSpacing.lg),
-                        ],
-                      );
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
                     },
                   ),
 
@@ -453,14 +513,43 @@ class _AlbumsListScreenState extends ConsumerState<AlbumsListScreen>
                           ),
                         ),
                       )
-                    else if (albumState.isGrid)
-                      GridView.builder(
+                    else if (albumState.viewMode == ExplorerViewMode.gridLarge || albumState.viewMode == ExplorerViewMode.gridMedium || albumState.viewMode == ExplorerViewMode.gridSmall)
+                      LayoutBuilder(builder: (context, box) {
+                        final mode = albumState.viewMode;
+                        // Phones / native: unchanged 2 / 3 / 6 columns.
+                        // Web (wide): fit as many tiles as the icon size
+                        // allows, centered with a max width, so "Large
+                        // icons" is no longer 2 giant tiles.
+                        final wideWeb = kIsWeb &&
+                            MediaQuery.of(context).size.width >=
+                                ResponsiveUtils.mobileBreakpoint;
+                        final usable = box.maxWidth > ResponsiveUtils.galleryMaxWidth
+                            ? ResponsiveUtils.galleryMaxWidth
+                            : box.maxWidth;
+                        final columns = wideWeb
+                            ? ResponsiveUtils.columnsForTileWidth(
+                                usable,
+                                mode == ExplorerViewMode.gridLarge
+                                    ? ResponsiveUtils.tileLarge
+                                    : (mode == ExplorerViewMode.gridMedium
+                                        ? ResponsiveUtils.tileMedium
+                                        : ResponsiveUtils.tileSmall))
+                            : (mode == ExplorerViewMode.gridLarge
+                                ? 2
+                                : (mode == ExplorerViewMode.gridMedium ? 3 : 6));
+                        return Align(
+                          alignment: Alignment.topCenter,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                                maxWidth: wideWeb
+                                    ? ResponsiveUtils.galleryMaxWidth
+                                    : double.infinity),
+                            child: GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         itemCount: albumState.filteredAlbums.length,
-                        gridDelegate:
-                            const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 300,
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: columns,
                           mainAxisSpacing: AppSpacing.md,
                           crossAxisSpacing: AppSpacing.md,
                           childAspectRatio: 0.68,
@@ -487,8 +576,11 @@ class _AlbumsListScreenState extends ConsumerState<AlbumsListScreen>
                             ),
                           );
                         },
-                      )
-                    else
+                            ),
+                          ),
+                        );
+                      })
+                    else if (albumState.viewMode == ExplorerViewMode.list)
                       ListView.separated(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
@@ -518,6 +610,36 @@ class _AlbumsListScreenState extends ConsumerState<AlbumsListScreen>
                             ),
                           );
                         },
+                      )
+                    else
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: DataTable(
+                          showCheckboxColumn: false,
+                          columns: const [
+                            DataColumn(label: Text('Name')),
+                            DataColumn(label: Text('Items')),
+                            DataColumn(label: Text('Updated')),
+                          ],
+                          rows: albumState.filteredAlbums.map((album) {
+                            return DataRow(
+                              onSelectChanged: (_) => Navigator.of(context).pushNamed(AppRoutes.adminAlbumDetails, arguments: album.id),
+                              cells: [
+                                DataCell(
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.photo_album_rounded, size: 18),
+                                      const SizedBox(width: 8),
+                                      Text(album.name),
+                                    ],
+                                  ),
+                                ),
+                                DataCell(Text('${album.photoCount + album.videoCount}')),
+                                DataCell(Text(album.updatedAt.toLocal().toString().split(' ')[0])),
+                              ],
+                            );
+                          }).toList(growable: false),
+                        ),
                       ),
                   ],
                 ],

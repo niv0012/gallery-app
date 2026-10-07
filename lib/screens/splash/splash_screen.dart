@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../core/network/api_client.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/settings_model.dart';
@@ -82,6 +84,27 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         DeepLinkService.instance.onSplashComplete();
         return;
       }
+
+      // PRIORITY 2: Check for forced app updates.
+      try {
+        final apiClient = ref.read(apiClientProvider);
+        final response = await apiClient.get('/config', withAuth: false);
+        final minVersionStr = response['min_app_version'] as String?;
+        if (minVersionStr != null && minVersionStr.isNotEmpty) {
+          final packageInfo = await PackageInfo.fromPlatform();
+          final currentVersionStr = '${packageInfo.version}+${packageInfo.buildNumber}';
+          
+          if (_isUpdateRequired(currentVersionStr, minVersionStr)) {
+            if (!mounted) return;
+            Navigator.of(context).pushReplacementNamed(AppRoutes.updateRequired);
+            return;
+          }
+        }
+      } catch (e) {
+        debugPrint('Failed to fetch /config: $e');
+        // If config fails (e.g. network error), continue to load the app
+      }
+      if (!mounted) return;
 
       // Backend-agnostic check: OnboardingLocalStore owns the only
       // persistence detail here (a Hive-backed flag today, but callers
@@ -327,6 +350,31 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         ),
       ),
     );
+  }
+  bool _isUpdateRequired(String current, String minimum) {
+    // Format is typically "1.0.0+42"
+    List<String> parseVersion(String v) {
+      final parts = v.split('+');
+      final version = parts[0];
+      final build = parts.length > 1 ? parts[1] : '0';
+      return [...version.split('.'), build];
+    }
+
+    try {
+      final currentParts = parseVersion(current);
+      final minParts = parseVersion(minimum);
+      
+      for (var i = 0; i < 4; i++) {
+        final currentVal = i < currentParts.length ? int.tryParse(currentParts[i]) ?? 0 : 0;
+        final minVal = i < minParts.length ? int.tryParse(minParts[i]) ?? 0 : 0;
+        
+        if (currentVal < minVal) return true;
+        if (currentVal > minVal) return false;
+      }
+    } catch (_) {
+      // If parsing fails, don't block the user
+    }
+    return false;
   }
 }
 

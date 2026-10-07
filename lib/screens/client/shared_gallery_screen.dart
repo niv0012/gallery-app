@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
@@ -107,8 +108,104 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
   final _formKey = GlobalKey<FormState>();
   final bool _obscurePasscode = true;
   final Set<String> _selectedIds = {};
+  final Set<String> _favouriteIds = {};
+  String? _guestEmail;
+
+
+  Future<void> _loadGuestEmail() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _guestEmail = prefs.getString('guest_email');
+    });
+  }
+
+  Future<void> _promptForEmailAndFavourite(String mediaId, PublicGalleryController controller) async {
+    final emailCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final email = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Enter Email'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Please provide your email to favourite photos.'),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: emailCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Email Address',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (val) => val != null && val.contains('@') ? null : 'Enter a valid email',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(null),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.of(ctx).pop(emailCtrl.text.trim());
+              }
+            },
+            child: const Text('Submit'),
+          ),
+        ],
+      ),
+    );
+
+    if (email != null && email.isNotEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('guest_email', email);
+      setState(() {
+        _guestEmail = email;
+      });
+      _toggleFavourite(mediaId, controller);
+    }
+  }
+
+  Future<void> _toggleFavourite(String mediaId, PublicGalleryController controller) async {
+    if (_guestEmail == null) {
+      return _promptForEmailAndFavourite(mediaId, controller);
+    }
+
+    final isFav = _favouriteIds.contains(mediaId);
+    setState(() {
+      if (isFav) {
+        _favouriteIds.remove(mediaId);
+      } else {
+        _favouriteIds.add(mediaId);
+      }
+    });
+
+    try {
+      await controller.toggleFavourite(mediaId, _guestEmail!);
+    } catch (e) {
+      // Revert on error
+      if (mounted) {
+        setState(() {
+          if (isFav) {
+            _favouriteIds.add(mediaId);
+          } else {
+            _favouriteIds.remove(mediaId);
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to update favourite')),
+        );
+      }
+    }
+  }
 
   bool get _isSelectionMode => _selectedIds.isNotEmpty;
+  String _selectedFilterTab = 'All';
 
   _ClientGalleryViewMode _viewMode = _ClientGalleryViewMode.grid;
 
@@ -185,6 +282,7 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
   @override
   void initState() {
     super.initState();
+    _loadGuestEmail();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final settings = ref.read(settingsProvider);
@@ -296,8 +394,71 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
         return _buildPasscodeGate(context, controller);
 
       case PublicGalleryStatus.loaded:
+        final faceSearchState = ref.watch(faceSearchProvider);
+        if (controller.data!.kind == 'face_search' && faceSearchState.searchResults.isEmpty) {
+          return _buildFaceSearchGate(context, controller.data!, controller);
+        }
         return _buildGallery(context, controller.data!, controller);
     }
+  }
+
+  Widget _buildFaceSearchGate(BuildContext context, PublicGalleryData data, PublicGalleryController controller) {
+    return Scaffold(
+      appBar: CustomAppBar(title: 'Find My Photos', showBack: true),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(AppSpacing.lg),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: GlassCard(
+                padding: EdgeInsets.all(AppSpacing.xl),
+                borderRadius: AppRadius.lg,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.face_retouching_natural_rounded, color: AppColors.primary, size: 24),
+                        SizedBox(width: 10),
+                        Text(
+                          'Selfie Search Required',
+                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'The photographer requires you to upload a selfie to view your photos. Only photos containing your face will be shown.',
+                      style: TextStyle(
+                          fontSize: 13,
+                          color: (Theme.of(context).brightness == Brightness.dark ? AppColors.subtitleOnDark : AppColors.subtitle),
+                          height: 1.4),
+                    ),
+                    SizedBox(height: AppSpacing.xl),
+                    GradientButton(
+                      label: 'Take or Upload Selfie',
+                      icon: Icons.camera_alt_rounded,
+                      onPressed: () {
+                        ref.read(faceSearchProvider.notifier).useSharedGallery(
+                          token: data.token,
+                          password: controller.password,
+                        );
+                        Navigator.of(context).pushNamed(AppRoutes.faceSearchUpload);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildPreviewBanner() {
@@ -443,12 +604,71 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
   // -------------------------------------------------------------
   // PUBLIC OR UNLOCKED GALLERY SCREEN (Parallax Cover, Info, Grid)
   // -------------------------------------------------------------
+
+  Future<void> _downloadMediaIds(
+      List<String> ids,
+      PublicGalleryData data,
+      List<MediaModel> albumMedia,
+      BuildContext context,
+      WidgetRef ref,
+      dynamic gridFileCache,
+      dynamic gridDownloadService) async {
+    final apiClient = ref.read(apiClientProvider);
+    for (final id in ids) {
+      final m = albumMedia.firstWhere((x) => x.id == id, orElse: () => albumMedia.first);
+      if (m.id != id) continue; // Not found
+
+      if (kIsWeb) {
+        final result = await gridFileCache.bytesFor(
+          m,
+          watermarkUrl: data.showWatermark ? data.studioLogoUrl : null,
+        );
+        if (result == null) continue;
+        if (!context.mounted) continue;
+        await gridDownloadService.downloadBytes(
+          context: context,
+          bytes: result.bytes,
+          fileName: result.fileName,
+          mediaId: m.id,
+          apiClient: apiClient,
+          isClientUser: true,
+        );
+      } else {
+        final filePath = await gridFileCache.localPathFor(
+          m,
+          watermarkUrl: data.showWatermark ? data.studioLogoUrl : null,
+        );
+        if (filePath == null) continue;
+        if (!context.mounted) continue;
+        await gridDownloadService.downloadOriginal(
+          context: context,
+          filePath: filePath,
+          mediaId: m.id,
+          apiClient: apiClient,
+          isClientUser: true,
+        );
+      }
+    }
+  }
+
   Widget _buildGallery(BuildContext context, PublicGalleryData data,
       PublicGalleryController controller) {
-    final albumMedia = List<MediaModel>.from(data.media ?? [])
+    final faceSearchState = ref.watch(faceSearchProvider);
+    final rawMedia = data.kind == 'face_search' 
+        ? faceSearchState.searchResults.map((r) => r.media).toList() 
+        : (data.media ?? []);
+
+    final albumMedia = List<MediaModel>.from(rawMedia)
       ..sort((a, b) => b.modifiedAt.compareTo(a.modifiedAt));
     final hasCover = albumMedia.isNotEmpty;
     final coverMedia = hasCover ? albumMedia.first : null;
+
+    final filteredMedia = albumMedia.where((m) {
+      if (_selectedFilterTab == 'Photos') return m.type == MediaType.photo;
+      if (_selectedFilterTab == 'Videos') return m.type == MediaType.video;
+      if (_selectedFilterTab == 'Favourite') return _favouriteIds.contains(m.id);
+      return true;
+    }).toList();
 
     return Scaffold(
       body: PinchZoomHandler(
@@ -479,271 +699,80 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
           physics: const BouncingScrollPhysics(),
           slivers: [
             SliverAppBar(
-              expandedHeight: 280,
               pinned: true,
               elevation: 0,
-              leadingWidth: 64,
-            leading: Padding(
-              padding: EdgeInsets.only(left: 12),
-              child: Center(
-                child: InkWell(
-                  onTap: () => Navigator.pop(context),
-                  borderRadius: BorderRadius.circular(100),
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.4),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-                    ),
-                    child: Icon(Icons.arrow_back_ios_new_rounded,
-                        color: Colors.white, size: 16),
-                  ),
-                ),
-              ),
-            ),
-            actions: [
-              if (_isSelectionMode)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: Center(
-                    child: InkWell(
-                      onTap: () {
-                        setState(() {
-                          if (_selectedIds.length == albumMedia.length) {
-                            _selectedIds.clear();
-                          } else {
-                            _selectedIds.addAll(albumMedia.map((m) => m.id));
-                          }
-                        });
-                      },
+              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              leadingWidth: 200,
+              leading: Padding(
+                padding: const EdgeInsets.only(left: 12),
+                child: Row(
+                  children: [
+                    InkWell(
+                      onTap: () => Navigator.pop(context),
                       borderRadius: BorderRadius.circular(100),
                       child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.4),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-                        ),
-                        child: Icon(
-                          _selectedIds.length == albumMedia.length ? Icons.deselect_rounded : Icons.select_all_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        ),
+                        padding: const EdgeInsets.all(8),
+                        child: Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: Theme.of(context).brightness == Brightness.dark ? AppColors.textOnDark : AppColors.text),
                       ),
                     ),
-                  ),
-                ),
-              if (kIsWeb)
-                Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: Center(
-                    child: TextButton.icon(
-                      style: TextButton.styleFrom(
-                        backgroundColor: Colors.black.withValues(alpha: 0.4),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(100),
-                          side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-                        ),
-                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
                       ),
-                      icon: Icon(Icons.open_in_new_rounded, size: 16),
-                      label: Text('Open in App', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                      onPressed: () async {
-                        final uri = Uri.parse('picgallery://shared/${widget.token}');
-                        final playStoreUri = Uri.parse('https://play.google.com/store/apps/details?id=com.mk.picgallery');
-                        try {
-                          if (!await launchUrl(uri)) {
-                            // If custom scheme fails (app not installed), redirect to Play Store
-                            await launchUrl(playStoreUri, mode: LaunchMode.externalApplication);
-                          }
-                        } catch (e) {
-                          // Catch any platform exception and redirect to Play Store
-                          await launchUrl(playStoreUri, mode: LaunchMode.externalApplication);
-                        }
-                      },
+                      child: const Center(
+                        child: Text('P', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 14)),
+                      ),
                     ),
-                  ),
-                ),
-            ],
-            flexibleSpace: FlexibleSpaceBar(
-              title: Text(
-                data.album?.name ?? data.collection?.name ?? 'Gallery',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 16,
-                  shadows: [
-                    Shadow(
-                        color: Colors.black54,
-                        blurRadius: 4,
-                        offset: Offset(0, 2))
+                    const SizedBox(width: 8),
+                    Text('PicGallery', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Theme.of(context).brightness == Brightness.dark ? AppColors.textOnDark : AppColors.text)),
                   ],
                 ),
               ),
-              centerTitle: true,
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  _buildCoverImage(coverMedia, data.album?.gradientArgb ?? const [0xFF7C5CFF, 0xFFA855F7, 0xFFEC4899]),
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Colors.black38, Colors.black87],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              actions: [
+                IconButton(
+                  icon: Icon(_isSelectionMode ? Icons.deselect_rounded : Icons.check_circle_outline_rounded, color: Theme.of(context).brightness == Brightness.dark ? AppColors.textOnDark : AppColors.text),
+                  onPressed: () {
+                    setState(() {
+                      if (_selectedIds.length == filteredMedia.length && filteredMedia.isNotEmpty) {
+                        _selectedIds.clear();
+                      } else {
+                        _selectedIds.addAll(filteredMedia.map((m) => m.id));
+                      }
+                    });
+                  },
+                ),
+                IconButton(
+                  icon: Icon(Icons.share_outlined, color: Theme.of(context).brightness == Brightness.dark ? AppColors.textOnDark : AppColors.text),
+                  onPressed: () async {
+                      final url = 'https://picgallery.studio/share/${widget.token}';
+                      // just copy to clipboard or do nothing for now
+                  },
+                ),
+                const SizedBox(width: 8),
+              ],
             ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                  AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (widget.isPreview) ...[
-                    _buildPreviewBanner(),
-                    SizedBox(height: 12),
-                  ],
-                  Row(
-                    children: [
-                      Container(
-                        padding: EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: data.requiresPassword
-                              ? Colors.purple.withValues(alpha: 0.12)
-                              : Colors.blue.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: data.requiresPassword
-                                ? Colors.purple.withValues(alpha: 0.3)
-                                : Colors.blue.withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                                data.requiresPassword
-                                    ? Icons.lock_open_rounded
-                                    : Icons.public_rounded,
-                                size: 12,
-                                color: data.requiresPassword
-                                    ? Colors.purple
-                                    : Colors.blue),
-                            SizedBox(width: 4),
-                            Text(
-                              data.requiresPassword
-                                  ? 'Private Unlocked'
-                                  : 'Public Gallery',
-                              style: TextStyle(
-                                  color: data.requiresPassword
-                                      ? Colors.purple
-                                      : Colors.blue,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Container(
-                        padding: EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          (data.albums != null && data.albums!.isNotEmpty)
-                              ? '${data.albums!.length} Albums'
-                              : '${albumMedia.length} Photos & Videos',
-                          style: TextStyle(
-                              color: (Theme.of(context).brightness == Brightness.dark ? AppColors.subtitleOnDark : AppColors.subtitle),
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      const Spacer(),
-                      PopupMenuButton<_ClientGalleryViewMode>(
-                        tooltip: 'Change View Mode',
-                        initialValue: _viewMode,
-                        onSelected: _changeViewMode,
-                        child: Container(
-                          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                _viewMode == _ClientGalleryViewMode.compactGrid
-                                    ? Icons.apps_rounded
-                                    : _viewMode == _ClientGalleryViewMode.grid
-                                        ? Icons.grid_view_rounded
-                                        : _viewMode == _ClientGalleryViewMode.list
-                                            ? Icons.view_list_rounded
-                                            : Icons.table_rows_rounded,
-                                size: 16,
-                                color: Theme.of(context).brightness == Brightness.dark
-                                    ? AppColors.textOnDark
-                                    : AppColors.text,
-                              ),
-                              const SizedBox(width: 4),
-                              Icon(Icons.arrow_drop_down,
-                                  size: 16,
-                                  color: Theme.of(context).brightness == Brightness.dark
-                                      ? AppColors.textOnDark
-                                      : AppColors.text),
-                            ],
-                          ),
-                        ),
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: _ClientGalleryViewMode.compactGrid,
-                            child: Text('Compact Grid'),
-                          ),
-                          const PopupMenuItem(
-                            value: _ClientGalleryViewMode.grid,
-                            child: Text('Grid'),
-                          ),
-                          const PopupMenuItem(
-                            value: _ClientGalleryViewMode.list,
-                            child: Text('List'),
-                          ),
-                          const PopupMenuItem(
-                            value: _ClientGalleryViewMode.details,
-                            child: Text('Details'),
-                          ),
-                        ],
-                      ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (widget.isPreview) ...[
+                      _buildPreviewBanner(),
+                      const SizedBox(height: 12),
                     ],
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    (data.albums != null && data.albums!.isNotEmpty)
-                        ? 'Welcome to your collection. Tap any album to view its gallery.'
-                        : 'Welcome to your proofing gallery. Tap any image to review details, zoom, or playback video.',
-                    style: TextStyle(
-                        color: (Theme.of(context).brightness == Brightness.dark ? AppColors.subtitleOnDark : AppColors.subtitle), fontSize: 12, height: 1.4),
-                  ),
-                  SizedBox(height: 12),
-                  Divider(color: context.borderColor),
-                ],
+                    _buildHeaderCard(context, data, albumMedia, controller),
+                    const SizedBox(height: 24),
+                    if (data.albums == null || data.albums!.isEmpty)
+                      _buildFilterTabs(context),
+                  ],
+                ),
               ),
             ),
-          ),
           (data.albums != null && data.albums!.isNotEmpty)
               ? ((_viewMode == _ClientGalleryViewMode.list || _viewMode == _ClientGalleryViewMode.details)
                   ? SliverPadding(
@@ -791,7 +820,7 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
                         ),
                       ),
                     )
-                  : albumMedia.isEmpty
+                  : filteredMedia.isEmpty
                       ? const SliverFillRemaining(
                           child: Center(
                             child: EmptyStateCard(
@@ -806,7 +835,7 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
                               sliver: SliverList(
                                 delegate: SliverChildBuilderDelegate(
                                   (context, i) {
-                                    final m = albumMedia[i];
+                                    final m = filteredMedia[i];
                                     return Padding(
                                       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                                       child: SizedBox(
@@ -816,7 +845,7 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
                                       ),
                                     );
                                   },
-                                  childCount: albumMedia.length,
+                                  childCount: filteredMedia.length,
                                 ),
                               ),
                             )
@@ -834,11 +863,11 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
                                 ),
                                 delegate: SliverChildBuilderDelegate(
                                   (context, i) {
-                                    final m = albumMedia[i];
-                                    return _buildGridItem(context, m, albumMedia,
+                                    final m = filteredMedia[i];
+                                    return _buildGridItem(context, m, filteredMedia,
                                         data.showWatermark, data.allowDownload, data.studioLogoUrl);
                                   },
-                                  childCount: albumMedia.length,
+                                  childCount: filteredMedia.length,
                                 ),
                               ),
                             ),
@@ -886,47 +915,7 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
                       final ids = _selectedIds.toList(growable: false);
                       _clearSelection();
                       if (ids.isEmpty) return;
-
-                      // For web/mobile downloading, loop through ids and download individually.
-                      final apiClient = ref.read(apiClientProvider);
-                      for (final id in ids) {
-                        final m = albumMedia.firstWhere((x) => x.id == id,
-                            orElse: () => albumMedia.first);
-                        if (m.id != id) continue; // Not found
-
-                        if (kIsWeb) {
-                          final result = await _gridFileCache.bytesFor(
-                            m,
-                            watermarkUrl:
-                                data.showWatermark ? data.studioLogoUrl : null,
-                          );
-                          if (result == null) continue;
-                          if (!context.mounted) continue;
-                          await _gridDownloadService.downloadBytes(
-                            context: context,
-                            bytes: result.bytes,
-                            fileName: result.fileName,
-                            mediaId: m.id,
-                            apiClient: apiClient,
-                            isClientUser: true,
-                          );
-                        } else {
-                          final filePath = await _gridFileCache.localPathFor(
-                            m,
-                            watermarkUrl:
-                                data.showWatermark ? data.studioLogoUrl : null,
-                          );
-                          if (filePath == null) continue;
-                          if (!context.mounted) continue;
-                          await _gridDownloadService.downloadOriginal(
-                            context: context,
-                            filePath: filePath,
-                            mediaId: m.id,
-                            apiClient: apiClient,
-                            isClientUser: true,
-                          );
-                        }
-                      }
+                      await _downloadMediaIds(ids, data, albumMedia, context, ref, _gridFileCache, _gridDownloadService);
                     },
                     icon: Icon(Icons.download_rounded),
                     label: Text('Download ${_selectedIds.length} items'),
@@ -936,28 +925,115 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
               ],
             )
           : (albumMedia.isNotEmpty
-              ? FloatingActionButton.extended(
-                  heroTag: 'shared_gallery_face_search_fab',
-                  onPressed: () {
-                    // Scopes the search to this one shared album via the
-                    // token (+ whatever password already unlocked it, so
-                    // the password-gated `/public/share-links/{token}/face-search`
-                    // call doesn't re-prompt a guest who already got past
-                    // the passcode gate above).
-                    ref.read(faceSearchProvider.notifier).useSharedGallery(
-                          token: widget.token,
-                          password: controller.password,
-                        );
-                    Navigator.of(context)
-                        .pushNamed(AppRoutes.faceSearchLanding);
-                  },
-                  icon: Icon(Icons.face_retouching_natural_rounded),
-                  label: Text('Find My Photos'),
-                  backgroundColor: AppColors.primary,
-                )
-              : null),
-    );
-  }
+              ? Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (data.allowDownload && data.kind != 'face_search')
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: FloatingActionButton.extended(
+                          heroTag: 'download_all_fab',
+                          onPressed: () async {
+                            final apiClient = ref.read(apiClientProvider);
+                            String url = '${apiClient.baseUrl}/public/share-links/${widget.token}/download-zip';
+                            final pwd = controller.password;
+                            if (pwd != null && pwd.isNotEmpty) {
+                              url += '?password=${Uri.encodeComponent(pwd)}';
+                            }
+                            if (widget.albumId != null) {
+                              url += (url.contains('?') ? '&' : '?') + 'album_id=${widget.albumId}';
+                            }
+                            
+                            final uri = Uri.parse(url);
+                            if (await canLaunchUrl(uri)) {
+                              await launchUrl(uri, mode: LaunchMode.externalApplication);
+                            } else {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Could not open download link')),
+                                );
+                              }
+                            }
+                          },
+                          icon: const Icon(Icons.folder_zip_rounded),
+                          label: const Text('Download All'),
+                          backgroundColor: AppColors.primary,
+                        ),
+                      ),
+                    if (data.kind == 'face_search' && data.allowDownload)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: FloatingActionButton.extended(
+                          heroTag: 'download_all_mine_fab',
+                          onPressed: () async {
+                            final ids = albumMedia.map((e) => e.id).toList();
+                            await _downloadMediaIds(ids, data, albumMedia, context, ref, _gridFileCache, _gridDownloadService);
+                          },
+                          icon: const Icon(Icons.download_rounded),
+                          label: const Text('Download All Mine'),
+                          backgroundColor: AppColors.primary,
+                        ),
+                      ),
+                    if (data.kind == 'face_search')
+                      FloatingActionButton.extended(
+                        heroTag: 'send_me_my_photos_fab',
+                        onPressed: () async {
+                           try {
+                             final ids = albumMedia.map((e) => e.id).toList();
+                             final newToken = await controller.requestPrivateLink(ids);
+                             if (!context.mounted) return;
+                             showDialog(
+                               context: context,
+                               barrierDismissible: false,
+                               builder: (context) => AlertDialog(
+                                 title: Text('Photos Ready!'),
+                                 content: Text('A private link containing only your photos has been created.'),
+                                 actions: [
+                                   TextButton(
+                                     onPressed: () => Navigator.pop(context),
+                                     child: Text('Close'),
+                                   ),
+                                   FilledButton(
+                                     onPressed: () {
+                                       Navigator.pop(context);
+                                       final uri = Uri.parse('picgallery://shared/$newToken');
+                                       launchUrl(uri).catchError((_) => false);
+                                     },
+                                     child: Text('Open Link'),
+                                   ),
+                                 ]
+                               )
+                             );
+                           } catch (e) {
+                             if (!context.mounted) return;
+                             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to request link')));
+                           }
+                        },
+                        icon: const Icon(Icons.send_rounded),
+                        label: const Text('Send me my photos'),
+                        backgroundColor: AppColors.primary,
+                      ),
+                    if (data.kind != 'face_search')
+                      FloatingActionButton.extended(
+                        heroTag: 'shared_gallery_face_search_fab',
+                        onPressed: () {
+                          ref.read(faceSearchProvider.notifier).useSharedGallery(
+                            token: widget.token,
+                            password: controller.password,
+                          );
+                      Navigator.of(context)
+                          .pushNamed(AppRoutes.faceSearchLanding);
+                    },
+                    icon: Icon(Icons.face_retouching_natural_rounded),
+                    label: Text('Find My Photos'),
+                    backgroundColor: AppColors.primary,
+                  ),
+                ],
+              )
+            : null),
+      );
+    }
 
   Widget _buildCoverImage(MediaModel? media, List<int> fallbackGradient) {
     if (media == null) {
@@ -1209,9 +1285,253 @@ class _SharedGalleryScreenState extends ConsumerState<SharedGalleryScreen> {
                       color: Colors.white),
                 ),
               ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: Material(
+                color: Colors.transparent,
+                shape: const CircleBorder(),
+                clipBehavior: Clip.hardEdge,
+                child: InkWell(
+                  onTap: () {
+                    final controller = ref.read(publicGalleryControllerProvider(
+                        PublicGalleryTarget(token: widget.token, albumId: widget.albumId)));
+                    _toggleFavourite(m.id, controller);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      _favouriteIds.contains(m.id)
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
+                      color: _favouriteIds.contains(m.id)
+                          ? AppColors.error
+                          : Colors.white,
+                      size: 20,
+                      shadows: const [Shadow(color: Colors.black45, blurRadius: 4)],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
+  Widget _buildHeaderCard(BuildContext context, PublicGalleryData data, List<MediaModel> allMedia, PublicGalleryController controller) {
+    final studioName = 'Lumen Studio';
+    final studioInitials = studioName.isNotEmpty ? studioName[0].toUpperCase() : 'S';
+    final title = data.album?.name ?? data.collection?.name ?? 'Shared Gallery';
+    
+    final photoCount = allMedia.where((m) => m.type == MediaType.photo).length;
+    final videoCount = allMedia.where((m) => m.type == MediaType.video).length;
+    String countText = '';
+    if (photoCount > 0) countText += '$photoCount photos';
+    if (videoCount > 0) {
+      if (countText.isNotEmpty) countText += ', ';
+      countText += '$videoCount videos';
+    }
+    if (countText.isEmpty) countText = '0 items';
+    if (data.albums != null && data.albums!.isNotEmpty) {
+        countText = '${data.albums!.length} albums';
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF13131A),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 12,
+                backgroundColor: AppColors.primary,
+                child: Text(
+                  studioInitials,
+                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                studioName,
+                style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.collections_rounded, size: 12, color: Colors.white),
+                    const SizedBox(width: 6),
+                    Text(countText, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+              // if (false)
+              //   Container(
+              //     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              //     decoration: BoxDecoration(
+              //       color: Colors.white.withValues(alpha: 0.1),
+              //       borderRadius: BorderRadius.circular(100),
+              //     ),
+              //     child: Row(
+              //       mainAxisSize: MainAxisSize.min,
+              //       children: [
+              //         const Icon(Icons.schedule_rounded, size: 12, color: Colors.white),
+              //         const SizedBox(width: 6),
+              //         Text(
+              //           // '${data.expiryDate!.difference(DateTime.now()).inDays} days left',
+              //           'Expiring soon',
+              //           style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+              //         ),
+              //       ],
+              //     ),
+              //   ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                     if (data.allowDownload) {
+                        _downloadMediaIds(allMedia.map((e) => e.id).toList(), data, allMedia, context, ref, _gridFileCache, _gridDownloadService);
+                     } else {
+                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Downloads are disabled for this gallery.')));
+                     }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.download_rounded, size: 18),
+                  label: const Text('Download all', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    ref.read(faceSearchProvider.notifier).useSharedGallery(
+                      token: widget.token,
+                      password: controller.password,
+                    );
+                    Navigator.of(context).pushNamed(AppRoutes.faceSearchUpload);
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.face_retouching_natural_rounded, size: 18),
+                  label: const Text('Find my photos', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterTabs(BuildContext context) {
+    final tabs = ['All', 'Photos', 'Videos', 'Favourite'];
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: tabs.map((t) {
+          final isSelected = _selectedFilterTab == t;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: InkWell(
+              onTap: () {
+                setState(() {
+                  _selectedFilterTab = t;
+                });
+              },
+              borderRadius: BorderRadius.circular(100),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected ? AppColors.primary : Colors.transparent,
+                  border: Border.all(color: isSelected ? AppColors.primary : context.borderColor),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (t == 'Favourite') ...[
+                        Icon(isSelected ? Icons.favorite_rounded : Icons.favorite_border_rounded, 
+                            size: 14, 
+                            color: isSelected ? Colors.white : (Theme.of(context).brightness == Brightness.dark ? AppColors.textOnDark : AppColors.text)),
+                        const SizedBox(width: 6),
+                    ],
+                    Text(
+                      t,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: isSelected ? Colors.white : (Theme.of(context).brightness == Brightness.dark ? AppColors.textOnDark : AppColors.text),
+                      ),
+                    ),
+                    if (t == 'Favourite') ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          _favouriteIds.length.toString(),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: isSelected ? Colors.white : (Theme.of(context).brightness == Brightness.dark ? AppColors.textOnDark : AppColors.text),
+                          ),
+                        ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
 }
+
+

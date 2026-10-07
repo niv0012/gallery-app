@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,9 +8,11 @@ import '../core/network/api_client.dart';
 import '../repositories/media_repository.dart';
 import '../models/media_model.dart';
 import '../providers/album_provider.dart';
+import '../models/album_model.dart';
 import '../providers/auth_providers.dart';
 import '../providers/media_provider.dart';
 import '../providers/admin_dashboard_providers.dart';
+import '../providers/folder_explorer_provider.dart';
 import '../services/media_picker_service.dart' show MediaContentType;
 import '../services/upload_foreground_service.dart';
 import '../storage/upload_queue_local_store.dart';
@@ -18,6 +21,7 @@ import 'upload_job_model.dart';
 import 'picked_file_info.dart';
 import 'upload_network_gate.dart';
 import 'upload_queue_state.dart';
+import 'upload_media_prep.dart';
 
 /// Controller/notifier for the Upload Queue.
 ///
@@ -45,7 +49,7 @@ class UploadQueueController extends AsyncNotifier<UploadQueueState> {
 
   /// How many uploads may run in parallel. 2 is a good balance between
   /// throughput and avoiding server rate-limiting / OOM on web.
-  static const int _maxConcurrentUploads = 2;
+  static const int _maxConcurrentUploads = 3;
 
   /// Ids of jobs whose real upload (file read + network request) is currently
   /// in flight. Up to [_maxConcurrentUploads] may be active at once.
@@ -62,6 +66,8 @@ class UploadQueueController extends AsyncNotifier<UploadQueueState> {
   /// with a write on every progress event (which can be dozens per second).
   Timer? _saveDebounce;
 
+  Timer? _countsPollingTimer;
+
   /// Throttles Riverpod state updates during high-frequency upload progress events
   /// to prevent UI freezes.
   final Map<String, DateTime> _lastProgressUpdate = {};
@@ -69,6 +75,7 @@ class UploadQueueController extends AsyncNotifier<UploadQueueState> {
   /// Snapshot of total uploaded bytes across all jobs as of the last tick,
   /// used only to derive a real bytes/sec speed reading for display.
   int _lastTickTotalUploadedBytes = 0;
+  double _smoothedSpeed = 0.0;
 
   /// Task 19.12 — offline-upload queueing.
   ///
@@ -110,6 +117,8 @@ class UploadQueueController extends AsyncNotifier<UploadQueueState> {
     ref.onDispose(() {
       _ticker?.cancel();
       _ticker = null;
+      _countsPollingTimer?.cancel();
+      _countsPollingTimer = null;
       _offlineRetryTicker?.cancel();
       _offlineRetryTicker = null;
       _saveDebounce?.cancel();
@@ -195,6 +204,36 @@ class UploadQueueController extends AsyncNotifier<UploadQueueState> {
     }
     try {
       ref.read(adminDashboardProvider.notifier).refresh();
+    } catch (_) {}
+    try {
+      // Invalidate the specific folder that received this upload,
+      // plus 'root' (always, in case we're at root level),
+      // plus the entire family (all open folder views).
+      final folderId = media.folderId;
+      final albumId = media.albumId;
+
+      // If media has a direct folder, invalidate it.
+      if (folderId != null) {
+        ref.invalidate(folderContentsProvider(folderId));
+      }
+
+      // If media is inside an album, also try to refresh the album's parent folder.
+      // We look it up from the already-refreshed albumProvider state.
+      if (albumId != null) {
+        try {
+          final albums = ref.read(albumProvider).allAlbums;
+          final album = albums.cast<AlbumModel?>().firstWhere(
+            (a) => a?.id == albumId,
+            orElse: () => null,
+          );
+          if (album?.folderId != null) {
+            ref.invalidate(folderContentsProvider(album!.folderId!));
+          }
+        } catch (_) {}
+      }
+
+      // Always refresh root (covers uploads that go to root-level)
+      ref.invalidate(folderContentsProvider('root'));
     } catch (_) {}
   }
 
@@ -373,6 +412,18 @@ class UploadQueueController extends AsyncNotifier<UploadQueueState> {
     unawaited(_startForegroundService(current));
 
     _ticker?.cancel();
+    
+    _countsPollingTimer?.cancel();
+    _countsPollingTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      try {
+        final counts = await _mediaRepo.fetchMediaCounts();
+        ref.read(adminDashboardProvider.notifier).updateMediaCounts(
+          photoCount: counts['photo_count'] ?? 0,
+          videoCount: counts['video_count'] ?? 0,
+          totalSizeBytes: counts['total_size_bytes'] ?? 0,
+        );
+      } catch (_) {}
+    });
 
     _lastTickTotalUploadedBytes =
         current.jobs.fold<int>(0, (sum, j) => sum + j.uploadedBytes);
@@ -488,8 +539,21 @@ class UploadQueueController extends AsyncNotifier<UploadQueueState> {
           j.status == UploadJobStatus.queued);
       final deltaBytes = totalUploadedNow - _lastTickTotalUploadedBytes;
       _lastTickTotalUploadedBytes = totalUploadedNow;
-      final currentSpeed =
+      
+      final instantaneousSpeed =
           stillActive && deltaBytes > 0 ? (deltaBytes * 4).toDouble() : 0.0;
+
+      // Smooth the speed using an Exponential Moving Average (EMA) (Task 11)
+      if (instantaneousSpeed > 0) {
+        if (_smoothedSpeed == 0.0) {
+          _smoothedSpeed = instantaneousSpeed;
+        } else {
+          _smoothedSpeed = (_smoothedSpeed * 0.8) + (instantaneousSpeed * 0.2);
+        }
+      } else if (!stillActive) {
+        _smoothedSpeed = 0.0;
+      }
+      final currentSpeed = _smoothedSpeed;
 
       unawaited(_updateForegroundService(refreshed, stillActive));
 
@@ -518,7 +582,23 @@ class UploadQueueController extends AsyncNotifier<UploadQueueState> {
       if (!stillActive) {
         _ticker?.cancel();
         _ticker = null;
+        _countsPollingTimer?.cancel();
+        _countsPollingTimer = null;
         unawaited(UploadForegroundService.stop());
+        
+        try {
+          ref.read(mediaProvider).load();
+        } catch (_) {}
+        try {
+          ref.read(albumProvider).refreshSilently();
+        } catch (_) {}
+        try {
+          final targetFolder = refreshed.selectedFolderId;
+          if (targetFolder != null) {
+            ref.invalidate(folderContentsProvider(targetFolder));
+          }
+          ref.invalidate(folderContentsProvider('root'));
+        } catch (_) {}
       }
     });
   }
@@ -615,10 +695,8 @@ class UploadQueueController extends AsyncNotifier<UploadQueueState> {
         }
       }
 
-      // Compression is permanently disabled — files are always uploaded at
-      // their original quality regardless of per-job options or global
-      // upload quality settings. This ensures photos and videos are never
-      // degraded during upload.
+      // Compress if requested (and it's a photo). Video compression is 
+      // not yet implemented natively in prepareMediaBytesForUpload.
       List<int>? finalBytes;
       String? finalFilePath;
 
@@ -629,9 +707,27 @@ class UploadQueueController extends AsyncNotifier<UploadQueueState> {
           throw StateError('No bytes available for this file');
         } else {
           finalBytes = job.webBytes;
+          if (job.compress && contentType.startsWith('image/')) {
+             finalBytes = await prepareMediaBytesForUpload(
+               ref,
+               bytes: finalBytes!,
+               contentType: contentType,
+               forceCompress: true,
+             );
+          }
         }
       } else {
-        finalFilePath = job.filePath;
+        if (job.compress && contentType.startsWith('image/')) {
+          final raw = await File(job.filePath).readAsBytes();
+          finalBytes = await prepareMediaBytesForUpload(
+             ref, 
+             bytes: raw, 
+             contentType: contentType, 
+             forceCompress: true,
+          );
+        } else {
+          finalFilePath = job.filePath;
+        }
       }
 
       // On native platforms, if there's no filePath and no bytes, the file

@@ -12,6 +12,7 @@ from app.api.routes.media import _comment_count_for, _like_info_for
 from app.core.album_sharing import active_shares_for_client, is_shared_with
 from app.core.download_log import record_download_event
 from app.core.storage import build_media_url
+from app.core.visibility import is_visible_to_client
 from app.db.session import get_db
 from app.models.album_share import AlbumClientShare
 from app.models.connection import ConnectionStatus, StudioClientConnection
@@ -24,13 +25,9 @@ router = APIRouter(prefix="/client", tags=["client-gallery"])
 
 
 def _require_shared_studio(db: Session, studio_id: uuid.UUID, client_id: uuid.UUID) -> User:
-    """404s unless this studio currently has at least one active share
-    with the current client — either via an explicit `AlbumClientShare`
-    row, or via a public (no-password, non-revoked, non-expired)
-    `ShareLink` belonging to a studio the client is *accepted*-connected
-    to.
+    """404s unless this studio currently has at least one active explicit share
+    with the current client (either AlbumClientShare or direct ShareLink).
     """
-    # Path 1: explicit per-album share.
     has_explicit = db.execute(
         select(AlbumClientShare.id).where(
             AlbumClientShare.studio_id == studio_id,
@@ -40,28 +37,19 @@ def _require_shared_studio(db: Session, studio_id: uuid.UUID, client_id: uuid.UU
     ).first()
 
     if has_explicit is None:
-        # Path 2: client has an accepted connection AND the studio has
-        # at least one active public share link.
         now = datetime.now(timezone.utc)
-        has_implicit = db.execute(
-            select(StudioClientConnection.id).where(
-                StudioClientConnection.client_id == client_id,
-                StudioClientConnection.studio_id == studio_id,
-                StudioClientConnection.status == ConnectionStatus.accepted,
-            )
-        ).first()
-        has_public_link = db.execute(
+        has_direct_link = db.execute(
             select(ShareLink.id).where(
                 ShareLink.owner_id == studio_id,
+                ShareLink.client_id == client_id,
                 ShareLink.is_revoked.is_(False),
-                ShareLink.password_hash.is_(None),
                 and_(
                     ShareLink.expires_at.is_(None)
                     | (ShareLink.expires_at > now)  # type: ignore[operator]
                 ),
             )
         ).first()
-        if has_implicit is None or has_public_link is None:
+        if has_direct_link is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Studio not found")
 
     studio = db.get(User, studio_id)
@@ -112,13 +100,8 @@ def list_shared_studios(
     has at least one active share with this client, most recently shared
     first.
 
-    Two access paths are unioned:
-    1. Explicit `AlbumClientShare` rows (studio shared specific albums with
-       this client directly).
-    2. Public share links (no password, active, not expired) from studios
-       the client has an *accepted* connection with — treated as implicit
-       shares so the client sees those albums without requiring the studio
-       to also add an explicit share row.
+    Includes explicit `AlbumClientShare` rows and direct `ShareLink` rows 
+    assigned to this client.
     """
     # ── Path 1: explicit per-album shares ──────────────────────────────
     explicit_album_rows = db.execute(
@@ -145,45 +128,33 @@ def list_shared_studios(
         if lat is not None and (current_lat is None or lat > current_lat):
             studio_latest[sid] = lat
 
-    # ── Path 2: public share links from connected studios ───────────────
+    # ── Path 2: direct share links assigned to this client ───────────────
     now = datetime.now(timezone.utc)
 
-    # Studios the client has an accepted connection with.
-    connected_studio_ids = list(
-        db.execute(
-            select(StudioClientConnection.studio_id).where(
-                StudioClientConnection.client_id == current_user.id,
-                StudioClientConnection.status == ConnectionStatus.accepted,
-            )
-        ).scalars().all()
-    )
+    direct_link_rows = db.execute(
+        select(
+            ShareLink.owner_id,
+            ShareLink.album_id,
+            ShareLink.created_at,
+        )
+        .where(
+            ShareLink.client_id == current_user.id,
+            ShareLink.is_revoked.is_(False),
+            and_(
+                ShareLink.expires_at.is_(None)
+                | (ShareLink.expires_at > now)  # type: ignore[operator]
+            ),
+        )
+    ).all()
+    
+    for sid, aid, lat in direct_link_rows:
+        if sid not in studio_albums:
+            studio_albums[sid] = set()
+        studio_albums[sid].add(aid)
 
-    if connected_studio_ids:
-        implicit_album_rows = db.execute(
-            select(
-                ShareLink.owner_id,
-                ShareLink.album_id,
-                ShareLink.created_at,
-            )
-            .where(
-                ShareLink.owner_id.in_(connected_studio_ids),
-                ShareLink.is_revoked.is_(False),
-                ShareLink.password_hash.is_(None),
-                and_(
-                    ShareLink.expires_at.is_(None)
-                    | (ShareLink.expires_at > now)  # type: ignore[operator]
-                ),
-            )
-        ).all()
-        
-        for sid, aid, lat in implicit_album_rows:
-            if sid not in studio_albums:
-                studio_albums[sid] = set()
-            studio_albums[sid].add(aid)
-
-            current_lat = studio_latest.get(sid)
-            if lat is not None and (current_lat is None or lat > current_lat):
-                studio_latest[sid] = lat
+        current_lat = studio_latest.get(sid)
+        if lat is not None and (current_lat is None or lat > current_lat):
+            studio_latest[sid] = lat
 
     all_studio_ids = set(studio_albums.keys())
     if not all_studio_ids:
@@ -259,13 +230,30 @@ def list_shared_folders(
 
     all_folders = {
         f.id: f
-        for f in db.execute(select(Folder).where(Folder.owner_id == studio_id)).scalars().all()
+        for f in db.execute(select(Folder).where(Folder.deleted_at.is_(None), Folder.owner_id == studio_id)).scalars().all()
     }
 
     # Walk each leaf folder up to the root, collecting every ancestor so
     # the pruned tree stays connected.
+    
+    def _is_folder_tree_visible(f_id: uuid.UUID) -> bool:
+        curr = f_id
+        seen = set()
+        while curr is not None:
+            if curr in seen:
+                break
+            seen.add(curr)
+            f = all_folders.get(curr)
+            if f is None or getattr(f, "is_hidden", False):
+                return False
+            curr = f.parent_id
+        return True
+
     included_ids: set[uuid.UUID] = set()
     for folder_id in leaf_folder_ids:
+        if not _is_folder_tree_visible(folder_id):
+            continue
+            
         current_id: uuid.UUID | None = folder_id
         while current_id is not None and current_id not in included_ids:
             included_ids.add(current_id)
@@ -319,6 +307,10 @@ def list_shared_albums_for_studio(
         )
         .order_by(Album.display_order.asc(), Album.created_at.desc())
     ).scalars().all()
+    
+    # Filter out albums inside hidden folders
+    albums = [a for a in albums if is_visible_to_client(db, album_id=a.id)]
+    
     if not albums:
         return []
 
@@ -377,6 +369,9 @@ def list_shared_album_media(
     # Confirm the album actually belongs to this studio (prevents IDOR).
     album = db.get(Album, album_id)
     if album is None or album.owner_id != studio_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found")
+        
+    if not is_visible_to_client(db, album_id=album_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found")
 
     query = select(Media).where(
@@ -445,6 +440,9 @@ def log_client_download(
         or media.album_id is None
         or not is_shared_with(db, album_id=media.album_id, client_id=current_user.id)
     ):
+        raise HTTPException(status_code=404, detail="Media not found")
+        
+    if not is_visible_to_client(db, album_id=media.album_id):
         raise HTTPException(status_code=404, detail="Media not found")
 
     event = record_download_event(
@@ -549,9 +547,15 @@ def list_shared_download_history(
     if album_id is not None:
         if not is_shared_with(db, album_id=album_id, client_id=current_user.id):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found")
+        if not is_visible_to_client(db, album_id=album_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found")
         scoped_album_ids: set[uuid.UUID] = {album_id}
     else:
-        scoped_album_ids = shared_album_ids
+        # Filter out hidden albums
+        scoped_album_ids = {a_id for a_id in shared_album_ids if is_visible_to_client(db, album_id=a_id)}
+
+    if not scoped_album_ids:
+        return []
 
     rows = db.execute(
         select(DownloadEvent, User.full_name)

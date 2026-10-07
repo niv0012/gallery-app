@@ -142,7 +142,12 @@ class ApiAdminDashboardRepository implements AdminDashboardRepository {
 
     final statsJson = results[0] as Map<String, dynamic>;
     final connectionsJson = results[1] as List<dynamic>;
-    final mediaJson = results[2] as List<dynamic>;
+    // /media returns a paginated MediaPageRead object {items, total_count, next_cursor},
+    // not a bare list — extract the 'items' array to get the actual media list.
+    final mediaRaw = results[2];
+    final mediaJson = mediaRaw is List
+        ? mediaRaw
+        : (mediaRaw as Map<String, dynamic>)['items'] as List<dynamic>? ?? <dynamic>[];
     final notificationsJson = results[3] as List<dynamic>;
     final activityLogJson = results[4] as Map<String, dynamic>;
     final analyticsJson = results[5] as Map<String, dynamic>;

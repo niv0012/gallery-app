@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:math' as math;
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
@@ -26,69 +28,94 @@ class MediaThumb extends StatelessWidget {
   /// memory use and scroll jank. Pass a larger value for hero-sized uses.
   final int cacheWidth;
 
+  /// When true, always loads the full-resolution original (`remoteUrl`)
+  /// instead of the server-generated compressed thumbnail. Use this for
+  /// full-screen / detail views. Defaults to false (grid-safe thumbnails).
+  final bool fullQuality;
+
   const MediaThumb({
     super.key,
     required this.media,
     this.fit = BoxFit.cover,
     this.cacheWidth = 480,
+    this.fullQuality = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final path = media.type == MediaType.photo && kIsWeb
-        ? media.displayThumbnailPath
-        : media.displayPath;
-    final isNetwork = media.isDisplayPathNetwork;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        int? dynamicCacheWidth;
+        if (!fullQuality) {
+          if (constraints.maxWidth.isFinite && constraints.maxWidth > 0) {
+            final ratio = MediaQuery.of(context).devicePixelRatio;
+            dynamicCacheWidth = math.min(1080, (constraints.maxWidth * ratio).round());
+          } else {
+            dynamicCacheWidth = math.min(1080, cacheWidth);
+          }
+        }
 
-    if (media.type == MediaType.photo) {
-      if (isNetwork) {
-        // Prefer the server-generated thumbnail over the full original.
-        final thumb = media.remoteThumbnailUrl;
-        final url = (thumb != null && thumb.isNotEmpty) ? thumb : path;
-        return Image.network(
-          url,
-          fit: fit,
-          cacheWidth: cacheWidth,
-          errorBuilder: (context, error, stackTrace) =>
-              _Placeholder(media: media),
-        );
-      }
-      if (!kIsWeb && path.isNotEmpty && File(path).existsSync()) {
-        return Image.file(
-          File(path),
-          fit: fit,
-          cacheWidth: cacheWidth,
-          errorBuilder: (context, error, stackTrace) =>
-              _Placeholder(media: media),
-        );
-      }
-    } else {
-      final thumbPath = media.displayThumbnailPath;
-      final isThumbNetwork =
-          thumbPath.startsWith('http://') || thumbPath.startsWith('https://');
-      if (isThumbNetwork) {
-        return Image.network(
-          thumbPath,
-          fit: fit,
-          cacheWidth: cacheWidth,
-          errorBuilder: (context, error, stackTrace) =>
-              VideoFallbackThumbnail(media: media, fit: fit),
-        );
-      } else if (!kIsWeb &&
-          thumbPath.isNotEmpty &&
-          File(thumbPath).existsSync()) {
-        return Image.file(
-          File(thumbPath),
-          fit: fit,
-          cacheWidth: cacheWidth,
-          errorBuilder: (context, error, stackTrace) =>
-              _Placeholder(media: media),
-        );
-      }
-    }
-    return media.type == MediaType.video
-        ? VideoFallbackThumbnail(media: media, fit: fit)
-        : _Placeholder(media: media);
+        final path = media.type == MediaType.photo && kIsWeb
+            ? media.displayThumbnailPath
+            : media.displayPath;
+        final isNetwork = media.isDisplayPathNetwork;
+
+        if (media.type == MediaType.photo) {
+          if (isNetwork) {
+            // fullQuality=true → always use the original file_url (full-res).
+            // fullQuality=false → prefer server thumbnail for grid performance.
+            final thumb = media.remoteThumbnailUrl;
+            final url = fullQuality
+                ? (media.remoteUrl ?? path)
+                : ((thumb != null && thumb.isNotEmpty) ? thumb : path);
+            return CachedNetworkImage(
+              imageUrl: url,
+              fit: fit,
+              memCacheWidth: dynamicCacheWidth,
+              errorWidget: (context, url, error) => _Placeholder(media: media),
+              placeholder: (context, url) => _Placeholder(media: media),
+            );
+          }
+          if (!kIsWeb && path.isNotEmpty && File(path).existsSync()) {
+            return Image.file(
+              File(path),
+              fit: fit,
+              cacheWidth: dynamicCacheWidth,
+              errorBuilder: (context, error, stackTrace) =>
+                  _Placeholder(media: media),
+            );
+          }
+        } else {
+          final thumbPath = media.displayThumbnailPath;
+          final isThumbNetwork =
+              thumbPath.startsWith('http://') || thumbPath.startsWith('https://');
+          if (isThumbNetwork) {
+            return CachedNetworkImage(
+              imageUrl: thumbPath,
+              fit: fit,
+              memCacheWidth: dynamicCacheWidth,
+              errorWidget: (context, url, error) =>
+                  VideoFallbackThumbnail(media: media, fit: fit),
+              placeholder: (context, url) =>
+                  VideoFallbackThumbnail(media: media, fit: fit),
+            );
+          } else if (!kIsWeb &&
+              thumbPath.isNotEmpty &&
+              File(thumbPath).existsSync()) {
+            return Image.file(
+              File(thumbPath),
+              fit: fit,
+              cacheWidth: dynamicCacheWidth,
+              errorBuilder: (context, error, stackTrace) =>
+                  _Placeholder(media: media),
+            );
+          }
+        }
+        return media.type == MediaType.video
+            ? VideoFallbackThumbnail(media: media, fit: fit)
+            : _Placeholder(media: media);
+      },
+    );
   }
 }
 

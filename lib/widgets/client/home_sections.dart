@@ -11,7 +11,7 @@ import '../../models/album_model.dart';
 import '../../models/studio_model.dart';
 import '../../models/notification_alert.dart';
 import '../../models/download_history_model.dart';
-import '../../models/gallery_collection_model.dart';
+
 import '../../models/studio_client_connection_model.dart';
 import '../../providers/auth_providers.dart';
 import '../../providers/connected_albums_provider.dart';
@@ -977,60 +977,6 @@ class _DownloadTile extends StatelessWidget {
   }
 }
 
-// ─── Collections Chips ──────────────────────────────────────────────────
-
-class CollectionsChips extends StatelessWidget {
-  final List<GalleryCollectionModel> collections;
-
-  const CollectionsChips({super.key, required this.collections});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 42,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-        itemCount: collections.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (_, index) {
-          final c = collections[index];
-          return Material(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? AppColors.darkSurface
-                : Colors.white,
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              onTap: () => Navigator.of(context).pushNamed(
-                AppRoutes.collectionsDetails,
-                arguments: c.id,
-              ),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                  border: Border.all(color: context.borderColor),
-                ),
-                child: Text(
-                  c.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: context.textPrimary,
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
 
 // ─── Quick Action Row ───────────────────────────────────────────────────
 

@@ -56,6 +56,48 @@ class CachingMediaRepository implements MediaRepository {
   }
 
   @override
+  Future<MediaPage> fetchMediaPage({
+    String? albumId,
+    String? folderId,
+    bool unfiledOnly = false,
+    MediaType? type,
+    bool favoritesOnly = false,
+    String? likedByClientId,
+    int? pageSize,
+    String? cursor,
+  }) async {
+    try {
+      final page = await _api.fetchMediaPage(
+        albumId: albumId,
+        folderId: folderId,
+        unfiledOnly: unfiledOnly,
+        type: type,
+        favoritesOnly: favoritesOnly,
+        likedByClientId: likedByClientId,
+        pageSize: pageSize,
+        cursor: cursor,
+      );
+      // We still mirror the results into the cache.
+      await _bestEffort(() => _cache.mirrorFromRemote(page.data));
+      return page;
+    } catch (e) {
+      if (_isUnreachable(e)) {
+        // If unreachable, fallback to full fetchMedia since cache doesn't support pagination
+        final fallbackList = await _cache.fetchMedia(
+          albumId: albumId,
+          folderId: folderId,
+          unfiledOnly: unfiledOnly,
+          type: type,
+          favoritesOnly: favoritesOnly,
+          likedByClientId: likedByClientId,
+        );
+        return MediaPage(data: fallbackList, cursor: null);
+      }
+      rethrow;
+    }
+  }
+
+  @override
   Future<List<MediaModel>> fetchMedia({
     String? albumId,
     String? folderId,
@@ -237,6 +279,11 @@ class CachingMediaRepository implements MediaRepository {
   Future<void> emptyTrash() async {
     await _api.emptyTrash();
     await _bestEffort(() => _cache.emptyTrash());
+  }
+
+  @override
+  Future<Map<String, int>> fetchMediaCounts() async {
+    return _api.fetchMediaCounts();
   }
 
   // ---------------------------------------------------------------------

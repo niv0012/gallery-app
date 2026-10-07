@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/utils/app_exceptions.dart';
 import '../core/utils/validators.dart';
 import '../models/album_model.dart';
+import '../models/delete_preview_model.dart';
 
 import '../models/stats_models.dart';
 import '../repositories/album_repository.dart';
@@ -12,6 +13,7 @@ import 'auth_providers.dart'
     show apiClientProvider, AuthState, authStateProvider, authProvider;
 import 'folder_provider.dart';
 import 'media_provider.dart';
+import 'folder_explorer_provider.dart' show ExplorerViewMode;
 
 enum AlbumSortOption {
   recent,
@@ -45,7 +47,7 @@ class AlbumState {
     required this.sortOption,
     required this.filterOption,
     required this.folderId,
-    required this.isGrid,
+    required this.viewMode,
     required this.allAlbums,
   });
 
@@ -60,7 +62,7 @@ class AlbumState {
   /// [AlbumModel.folderId], which is the real filing link).
   final String? folderId;
 
-  final bool isGrid;
+  final ExplorerViewMode viewMode;
 
   final List<AlbumModel> allAlbums;
 
@@ -133,7 +135,7 @@ class AlbumState {
     // Set to true to explicitly clear folderId to null ("All folders").
     // Needed because `folderId: null` is ambiguous in nullable copyWith.
     bool clearFolderFilter = false,
-    bool? isGrid,
+    ExplorerViewMode? viewMode,
     List<AlbumModel>? allAlbums,
     bool clearLastError = false,
   }) {
@@ -144,7 +146,7 @@ class AlbumState {
       sortOption: sortOption ?? this.sortOption,
       filterOption: filterOption ?? this.filterOption,
       folderId: clearFolderFilter ? null : (folderId ?? this.folderId),
-      isGrid: isGrid ?? this.isGrid,
+      viewMode: viewMode ?? this.viewMode,
       allAlbums: allAlbums ?? this.allAlbums,
     );
   }
@@ -175,7 +177,7 @@ class AlbumNotifier extends AsyncNotifier<AlbumState> {
       sortOption: AlbumSortOption.recent,
       filterOption: AlbumFilterOption.all,
       folderId: null,
-      isGrid: true,
+      viewMode: ExplorerViewMode.gridMedium,
       allAlbums: [],
     );
 
@@ -244,7 +246,7 @@ class AlbumNotifier extends AsyncNotifier<AlbumState> {
       sortOption: AlbumSortOption.recent,
       filterOption: AlbumFilterOption.all,
       folderId: null,
-      isGrid: true,
+      viewMode: ExplorerViewMode.gridMedium,
       allAlbums: [],
     );
   }
@@ -275,9 +277,9 @@ class AlbumNotifier extends AsyncNotifier<AlbumState> {
     }
   }
 
-  void toggleGridList() {
+  void setViewMode(ExplorerViewMode mode) {
     final current = state.value!;
-    state = AsyncValue.data(current.copyWith(isGrid: !current.isGrid));
+    state = AsyncValue.data(current.copyWith(viewMode: mode));
   }
 
   // ---------------------------------------------------------------------
@@ -384,17 +386,15 @@ class AlbumNotifier extends AsyncNotifier<AlbumState> {
     return saved;
   }
 
-  Future<void> deleteAlbum(String id) async {
+  Future<void> deleteAlbum(String id, {DeleteMode mode = DeleteMode.moveUp}) async {
     final current = state.value ?? _empty();
     final idx = current.allAlbums.indexWhere((a) => a.id == id);
     if (idx == -1) throw NotFoundException('Album "$id" no longer exists');
 
-    await _repo.deleteAlbum(id);
+    await _repo.deleteAlbum(id, mode: mode);
 
-    final nextAlbums = [...current.allAlbums]..removeAt(idx);
-    final next = current.copyWith(allAlbums: nextAlbums, lastError: null);
-    state = AsyncValue.data(next);
-    _syncFolderCounts(nextAlbums);
+    ref.invalidateSelf();
+    await future;
     _syncMedia();
     try {
       ref.read(adminDashboardProvider.notifier).refresh();
@@ -568,7 +568,7 @@ class AlbumFacade {
   AlbumSortOption get sortOption => _state.sortOption;
   AlbumFilterOption get filterOption => _state.filterOption;
   String? get folderId => _state.folderId;
-  bool get isGrid => _state.isGrid;
+  ExplorerViewMode get viewMode => _state.viewMode;
   List<AlbumModel> get allAlbums => List.unmodifiable(_state.allAlbums);
   List<AlbumModel> get filteredAlbums => _state.filteredAlbums;
   List<AlbumModel> get recentAlbums => _state.recentAlbums;
@@ -584,7 +584,7 @@ class AlbumFacade {
   void setFilterOption(AlbumFilterOption value) =>
       _notifier.setFilterOption(value);
   void setFolder(String? folderId) => _notifier.setFolder(folderId);
-  void toggleGridList() => _notifier.toggleGridList();
+  void setViewMode(ExplorerViewMode mode) => _notifier.setViewMode(mode);
 
   Future<void> toggleFavorite(String albumId) =>
       _notifier.toggleFavorite(albumId);
@@ -614,7 +614,8 @@ class AlbumFacade {
         clearFolder: clearFolder,
       );
 
-  Future<void> deleteAlbum(String id) => _notifier.deleteAlbum(id);
+  Future<void> deleteAlbum(String id, {DeleteMode mode = DeleteMode.moveUp}) =>
+      _notifier.deleteAlbum(id, mode: mode);
 
   Future<void> moveToFolder(String albumId, String? folderId) =>
       _notifier.moveToFolder(albumId, folderId);
@@ -646,7 +647,7 @@ final albumProvider = Provider<AlbumFacade>((ref) {
       sortOption: AlbumSortOption.recent,
       filterOption: AlbumFilterOption.all,
       folderId: null,
-      isGrid: true,
+      viewMode: ExplorerViewMode.gridMedium,
       allAlbums: [],
     ),
   );

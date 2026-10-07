@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../widgets/common/pinch_zoom_handler.dart';
+import '../../../widgets/common/pinch_zoom_grid.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/media_format_utils.dart';
@@ -88,7 +88,7 @@ class _EmptyState extends StatelessWidget {
           ),
           SizedBox(height: AppSpacing.md),
           Text(
-            'No photos yet',
+            'No media yet',
             style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
@@ -177,43 +177,27 @@ class _MediaGridViewState extends State<_MediaGridView> {
   }
 
   Widget _buildGrid() {
-    return PinchZoomHandler(
+    return PinchZoomGrid(
       onZoomIn: _zoomIn,
       onZoomOut: _zoomOut,
-      child: GestureDetector(
-        // onScaleStart/Update handles BOTH two-finger touch pinch AND
-        // trackpad pinch-to-zoom on Web/desktop natively in Flutter.
-        onScaleStart: (details) {
-          _scaleStartCrossAxisCount = _crossAxisCount.toDouble();
-        },
-        onScaleUpdate: (details) {
-          if (details.scale == 1.0) return;
-          final newCount = (_scaleStartCrossAxisCount / details.scale)
-              .round()
-              .clamp(1, 8);
-          if (newCount != _crossAxisCount) {
-            setState(() => _crossAxisCount = newCount);
-          }
-        },
-        child: GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: _crossAxisCount,
-            mainAxisSpacing: AppSpacing.sm,
-            crossAxisSpacing: AppSpacing.sm,
-            childAspectRatio: 1,
-          ),
-          itemCount: widget.media.length,
-          itemBuilder: (context, i) {
-            final m = widget.media[i];
-            return _MediaThumb(
-              media: m,
-              cacheWidth: _crossAxisCount <= 2 ? 900 : 480,
-              onTap: () => widget.onTapMedia(m),
-            );
-          },
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: _crossAxisCount,
+          mainAxisSpacing: AppSpacing.sm,
+          crossAxisSpacing: AppSpacing.sm,
+          childAspectRatio: 1,
         ),
+        itemCount: widget.media.length,
+        itemBuilder: (context, i) {
+          final m = widget.media[i];
+          return _MediaThumb(
+            media: m,
+            cacheWidth: _crossAxisCount <= 2 ? 900 : 480,
+            onTap: () => widget.onTapMedia(m),
+          );
+        },
       ),
     );
   }

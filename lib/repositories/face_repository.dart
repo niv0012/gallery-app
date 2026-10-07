@@ -31,6 +31,12 @@ abstract class FaceRepository {
     required XFile selfie,
     int? faceIndex,
   });
+
+  /// Check indexing status.
+  Future<Map<String, dynamic>> getFaceIndexStatus({
+    String? albumId,
+    List<String>? albumIds,
+  });
 }
 
 class ApiFaceRepository implements FaceRepository {
@@ -77,6 +83,17 @@ class ApiFaceRepository implements FaceRepository {
     return _service.searchClientGallery(
       selfie: selfie,
       faceIndex: faceIndex,
+    );
+  }
+
+  @override
+  Future<Map<String, dynamic>> getFaceIndexStatus({
+    String? albumId,
+    List<String>? albumIds,
+  }) {
+    return _service.getFaceIndexStatus(
+      albumId: albumId,
+      albumIds: albumIds,
     );
   }
 }

@@ -73,8 +73,9 @@ class MediaFileCache {
   Future<String?> localPathFor(
     MediaModel media, {
     String? watermarkUrl,
+    Future<String?> Function()? getOriginalUrl,
   }) async {
-    final original = await _originalPathFor(media);
+    final original = await _originalPathFor(media, getOriginalUrl);
     if (original == null || !_shouldWatermark(media, watermarkUrl)) {
       return original;
     }
@@ -113,13 +114,10 @@ class MediaFileCache {
     }
   }
 
-  Future<String?> _originalPathFor(MediaModel media) async {
+  Future<String?> _originalPathFor(MediaModel media, Future<String?> Function()? getOriginalUrl) async {
     if (!media.isDisplayPathNetwork) {
       return media.displayPath.isEmpty ? null : media.displayPath;
     }
-
-    final url = media.displayPath;
-    if (url.isEmpty) return null;
 
     final ext = _extensionFor(
       media.fileName,
@@ -132,6 +130,14 @@ class MediaFileCache {
     // Reuse what's already been fetched rather than downloading again
     // on every Share/Save tap for the same item.
     if (await file.exists()) return file.path;
+
+    String url = media.displayPath;
+    if (getOriginalUrl != null) {
+      final signed = await getOriginalUrl();
+      if (signed != null && signed.isNotEmpty) url = signed;
+    }
+
+    if (url.isEmpty) return null;
 
     try {
       final response = await http.get(Uri.parse(url));
@@ -155,8 +161,9 @@ class MediaFileCache {
   Future<MediaBytesResult?> bytesFor(
     MediaModel media, {
     String? watermarkUrl,
+    Future<String?> Function()? getOriginalUrl,
   }) async {
-    final original = await _originalBytesFor(media);
+    final original = await _originalBytesFor(media, getOriginalUrl);
     if (original == null || !_shouldWatermark(media, watermarkUrl)) {
       return original;
     }
@@ -174,7 +181,7 @@ class MediaFileCache {
     );
   }
 
-  Future<MediaBytesResult?> _originalBytesFor(MediaModel media) async {
+  Future<MediaBytesResult?> _originalBytesFor(MediaModel media, Future<String?> Function()? getOriginalUrl) async {
     final ext = _extensionFor(
       media.fileName,
       fallback: media.type == MediaType.video ? '.mp4' : '.jpg',
@@ -183,13 +190,15 @@ class MediaFileCache {
         media.fileName.isNotEmpty ? media.fileName : '${media.id}$ext';
 
     if (!media.isDisplayPathNetwork) {
-      // Device-local media has no meaning on web (no filesystem), so
-      // the only real source of bytes here is a network URL. If we
-      // somehow get a non-network path on web there's nothing to fetch.
       return null;
     }
 
-    final url = media.displayPath;
+    String url = media.displayPath;
+    if (getOriginalUrl != null) {
+      final signed = await getOriginalUrl();
+      if (signed != null && signed.isNotEmpty) url = signed;
+    }
+
     if (url.isEmpty) return null;
 
     try {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -9,15 +10,35 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 /// persistent notification with the upload count and percentage, and tells the
 /// OS not to kill the app process while active.
 ///
-/// iOS: No foreground service is needed. iOS allows background URLSession
-/// uploads natively; this class is a no-op on iOS/web/desktop.
+/// Android 15 constraint: `dataSync` foreground services are killed after 6
+/// hours by the OS. We work around this by stopping and restarting the service
+/// every [_restartInterval] (5.5 hours) so the 6-hour timer resets. The
+/// restart is invisible to the user — the notification reappears within a
+/// second of the stop.
+///
+/// iOS: This class is a no-op. Uploads use the app's regular request flow;
+/// background URLSession uploads are not implemented, so iOS suspends uploads
+/// after the app moves to the background. main.dart's lifecycle observer
+/// calls resumeAll() when the app returns to foreground.
 class UploadForegroundService {
   UploadForegroundService._();
 
   static const String _channelId = 'picgallery_upload_channel';
   static const String _channelName = 'Uploads';
 
+  /// Android 15 enforces a 6-hour cap on dataSync foreground services.
+  /// Restart every 5.5 hours to stay safely below the limit.
+  static const Duration _restartInterval = Duration(hours: 5, minutes: 30);
+
   static bool get _supported => !kIsWeb && Platform.isAndroid;
+
+  /// Timer that fires just before Android 15's 6-hour dataSync limit.
+  static Timer? _restartTimer;
+
+  /// Snapshot of the last notification content used to restore the
+  /// notification text across a service restart.
+  static ({int activeCount, int percentDone}) _lastTaskData =
+      (activeCount: 0, percentDone: 0);
 
   /// Call once at app startup (before any upload can start) to register the
   /// notification channel and initialize the plugin.
@@ -31,7 +52,7 @@ class UploadForegroundService {
         channelImportance: NotificationChannelImportance.LOW,
         priority: NotificationPriority.LOW,
       ),
-      // iOS uses BGURLSession natively, so this is a no-op.
+      // The plugin initialization below is guarded to Android above.
       iosNotificationOptions: const IOSNotificationOptions(),
       foregroundTaskOptions: ForegroundTaskOptions(
         // Do not run a separate Dart isolate — we only need the notification.
@@ -52,7 +73,9 @@ class UploadForegroundService {
   }) async {
     if (!_supported) return;
 
-    final taskData = _buildTaskData(activeCount: activeCount, percentDone: percentDone);
+    _lastTaskData = (activeCount: activeCount, percentDone: percentDone);
+    final taskData = _buildTaskData(
+        activeCount: activeCount, percentDone: percentDone);
 
     if (await FlutterForegroundTask.isRunningService) {
       await FlutterForegroundTask.updateService(
@@ -66,6 +89,9 @@ class UploadForegroundService {
         callback: _taskCallback,
       );
     }
+
+    // Schedule an Android-15-safe restart before the 6-hour kill.
+    _scheduleRestart();
   }
 
   /// Updates the notification text.  Call from the upload ticker with the
@@ -75,12 +101,15 @@ class UploadForegroundService {
     required int percentDone,
   }) async {
     if (!_supported) return;
+    _lastTaskData = (activeCount: activeCount, percentDone: percentDone);
+
     if (!await FlutterForegroundTask.isRunningService) {
       await start(activeCount: activeCount, percentDone: percentDone);
       return;
     }
 
-    final taskData = _buildTaskData(activeCount: activeCount, percentDone: percentDone);
+    final taskData = _buildTaskData(
+        activeCount: activeCount, percentDone: percentDone);
     await FlutterForegroundTask.updateService(
       notificationTitle: taskData.title,
       notificationText: taskData.body,
@@ -90,9 +119,36 @@ class UploadForegroundService {
   /// Stops the foreground service.  Call when the queue has no more active or
   /// queued jobs (i.e., everything is done, failed, or canceled).
   static Future<void> stop() async {
+    _restartTimer?.cancel();
+    _restartTimer = null;
     if (!_supported) return;
     if (!await FlutterForegroundTask.isRunningService) return;
     await FlutterForegroundTask.stopService();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Android 15 restart guard
+  // ---------------------------------------------------------------------------
+
+  /// Schedules a service stop→start just before Android 15's 6-hour kill.
+  /// Cancels any previously pending restart first, so calling [start] multiple
+  /// times doesn't stack timers.
+  static void _scheduleRestart() {
+    _restartTimer?.cancel();
+    if (!_supported) return;
+    _restartTimer = Timer(_restartInterval, _doRestart);
+  }
+
+  /// Silently restarts the foreground service to reset the Android 15
+  /// 6-hour `dataSync` timer.
+  static Future<void> _doRestart() async {
+    if (!_supported) return;
+    if (!await FlutterForegroundTask.isRunningService) return;
+
+    // Stop, then immediately re-start with the last known notification content.
+    await FlutterForegroundTask.stopService();
+    final snap = _lastTaskData;
+    await start(activeCount: snap.activeCount, percentDone: snap.percentDone);
   }
 
   // ---------------------------------------------------------------------------

@@ -26,7 +26,7 @@ from app.core.config import settings
 from app.core.face_recognition import DetectedFace, extract_faces
 from app.db.session import SessionLocal
 from app.models.face import FaceEmbedding
-from app.models.gallery import Media, MediaType
+from app.models.gallery import Album, Media, MediaType
 
 logger = logging.getLogger("app.face_index")
 
@@ -169,11 +169,45 @@ def search_faces(
         select(Media, distance_expr)
         .join(FaceEmbedding, FaceEmbedding.media_id == Media.id)
         .where(FaceEmbedding.owner_id == owner_id, Media.is_deleted.is_(False))
+        .where(
+            sa.or_(
+                Media.album_id.is_(None),
+                Media.album_id.in_(select(Album.id).where(Album.deleted_at.is_(None))),
+            )
+        )
     )
     if album_id is not None:
         stmt = stmt.where(Media.album_id == album_id)
     if folder_id is not None:
-        stmt = stmt.where(Media.folder_id == folder_id)
+        from sqlalchemy import text
+        # Folder scope = the folder, every sub-folder (soft-deleted ones
+        # excluded), AND every album that lives anywhere in that tree.
+        # Photos inside an album carry album_id but usually NO folder_id
+        # (the album — not the photo — belongs to the folder), so
+        # matching on Media.folder_id alone silently skipped them.
+        descendant_folders = db.execute(
+            text("""
+                WITH RECURSIVE folder_tree AS (
+                    SELECT id FROM folders WHERE id = :root_id AND deleted_at IS NULL
+                    UNION
+                    SELECT f.id FROM folders f
+                    INNER JOIN folder_tree ft ON f.parent_id = ft.id
+                    WHERE f.deleted_at IS NULL
+                )
+                SELECT id FROM folder_tree
+            """),
+            {"root_id": folder_id}
+        ).scalars().all()
+        tree_album_ids = select(Album.id).where(
+            Album.folder_id.in_(descendant_folders),
+            Album.deleted_at.is_(None),
+        )
+        stmt = stmt.where(
+            sa.or_(
+                Media.folder_id.in_(descendant_folders),
+                Media.album_id.in_(tree_album_ids),
+            )
+        )
     stmt = stmt.where(distance_expr <= max_distance).order_by(distance_expr).limit(limit)
 
     best: dict[uuid.UUID, tuple[Media, float]] = {}
@@ -190,26 +224,35 @@ def search_client_faces(
     db: Session,
     *,
     query_embedding: list[float],
-    authorized_album_ids: set[uuid.UUID],
+    authorized_album_ids: set[uuid.UUID] | None = None,
+    authorized_folder_ids: set[uuid.UUID] | None = None,
     threshold: float | None = None,
     limit: int = 200,
 ) -> list[tuple[Media, float]]:
-    """Cosine-similarity search across all faces in authorized albums,
+    """Cosine-similarity search across all faces in authorized albums and folders,
     deduplicated to the best-matching face per photo. Returns (Media, similarity)
     pairs sorted by similarity descending.
     """
-    if not authorized_album_ids:
+    if not authorized_album_ids and not authorized_folder_ids:
         return []
 
     threshold = settings.FACE_MATCH_THRESHOLD if threshold is None else threshold
     max_distance = 1.0 - threshold
 
     distance_expr = FaceEmbedding.embedding.cosine_distance(query_embedding).label("distance")
+    
+    # Build the scope condition
+    scope_conditions = []
+    if authorized_album_ids:
+        scope_conditions.append(Media.album_id.in_(authorized_album_ids))
+    if authorized_folder_ids:
+        scope_conditions.append(sa.and_(Media.folder_id.in_(authorized_folder_ids), Media.album_id.is_(None)))
+        
     stmt = (
         select(Media, distance_expr)
         .join(FaceEmbedding, FaceEmbedding.media_id == Media.id)
         .where(
-            Media.album_id.in_(authorized_album_ids),
+            sa.or_(*scope_conditions),
             Media.is_deleted.is_(False),
             distance_expr <= max_distance
         )

@@ -51,7 +51,13 @@ class _FaceSearchScanProgressScreenState
   void _navigateToResultsOnce() {
     if (_navigated) return;
     _navigated = true;
-    Navigator.of(context).pushReplacementNamed(AppRoutes.faceSearchResults);
+    final mode = ref.read(faceSearchProvider).mode;
+    if (mode == FaceSearchMode.sharedGallery) {
+      Navigator.of(context).pop();
+      Navigator.of(context).pop();
+    } else {
+      Navigator.of(context).pushReplacementNamed(AppRoutes.faceSearchResults);
+    }
   }
 
   void _cancel() {
@@ -69,7 +75,7 @@ class _FaceSearchScanProgressScreenState
 
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) {},
+      onPopInvokedWithResult: (didPop, result) {},
       child: Scaffold(
         appBar: CustomAppBar(
           title: 'Scanning…',
@@ -83,7 +89,11 @@ class _FaceSearchScanProgressScreenState
           ],
         ),
         body: SafeArea(
-          child: Padding(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: Padding(
             padding: EdgeInsets.all(AppSpacing.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -97,15 +107,39 @@ class _FaceSearchScanProgressScreenState
                       color: AppColors.error.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Text(
-                      state.error!,
-                      style: TextStyle(color: AppColors.error),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          state.error!,
+                          style: TextStyle(color: AppColors.error),
+                        ),
+                        SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            FilledButton.icon(
+                              onPressed: _runSearch,
+                              icon: Icon(Icons.refresh_rounded),
+                              label: Text('Try again'),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: _cancel,
+                              icon: Icon(Icons.add_a_photo_outlined),
+                              label: Text('Use another photo'),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   )
                 else
                   Center(child: CircularProgressIndicator()),
                 const Spacer(),
               ],
+            ),
+          ),
             ),
           ),
         ),
@@ -142,7 +176,7 @@ class _FaceSearchScanProgressScreenState
                 ),
                 SizedBox(height: 6),
                 Text(
-                  'Matching your selfie against shared albums…',
+                  _scopeText(state),
                   style: TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
@@ -158,6 +192,23 @@ class _FaceSearchScanProgressScreenState
         ],
       ),
     );
+  }
+
+  String _scopeText(FaceSearchState state) {
+    switch (state.mode) {
+      case FaceSearchMode.myLibrary:
+        final label = state.scopeLabel;
+        if (state.folderIdFilter != null) {
+          return 'Matching your selfie against "${label ?? 'this folder'}" and its sub-folders…';
+        }
+        if (state.albumIdFilter != null) {
+          return 'Matching your selfie against "${label ?? 'this album'}"…';
+        }
+        return 'Matching your selfie against your entire library…';
+      case FaceSearchMode.clientGallery:
+      case FaceSearchMode.sharedGallery:
+        return 'Matching your selfie against shared albums…';
+    }
   }
 
   Widget _buildAnimatedScannerIcon() {

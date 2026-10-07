@@ -1,16 +1,28 @@
 import os
-import firebase_admin
-from firebase_admin import credentials, messaging
-from app.core.config import settings
 import logging
 
 logger = logging.getLogger(__name__)
+
+try:
+    import firebase_admin
+    from firebase_admin import credentials, messaging
+    _FIREBASE_AVAILABLE = True
+except ImportError:
+    firebase_admin = None  # type: ignore
+    credentials = None  # type: ignore
+    messaging = None  # type: ignore
+    _FIREBASE_AVAILABLE = False
+    logger.warning("firebase_admin not installed — push notifications disabled. Run: pip install firebase-admin")
+
+from app.core.config import settings
 
 # Initialize Firebase Admin SDK if a credentials file is present.
 # The user needs to supply this file manually.
 FIREBASE_CREDENTIALS_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "firebase-adminsdk.json")
 
 def _init_firebase():
+    if not _FIREBASE_AVAILABLE:
+        return
     if not firebase_admin._apps:
         if os.path.exists(FIREBASE_CREDENTIALS_PATH):
             try:
@@ -29,7 +41,7 @@ def send_push_notification(token: str, title: str, body: str, data: dict | None 
     Sends a push notification to a specific FCM token.
     Returns True if successful, False otherwise.
     """
-    if not firebase_admin._apps:
+    if not _FIREBASE_AVAILABLE or not firebase_admin._apps:
         logger.warning("Firebase Admin SDK is not initialized. Cannot send push notification.")
         return False
         

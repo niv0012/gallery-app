@@ -120,7 +120,7 @@ class _CompactAnchoredDropdownState<T>
             mainAxisSize: MainAxisSize.min,
             children: [
               if (display != null)
-                DefaultTextStyle.merge(style: widget.style, child: display),
+                Flexible(child: DefaultTextStyle.merge(style: widget.style, child: display)),
               Icon(
                 _controller.isOpen
                     ? Icons.arrow_drop_up_rounded

@@ -4,10 +4,8 @@ from app.db.base import Base  # noqa: F401
 from app.models.user import User  # noqa: F401
 from app.models.gallery import (
     Album,
-    CollectionItem,
     DownloadEvent,
     Folder,
-    GalleryCollection,
     Media,
     MediaComment,
     MediaLike,
@@ -23,3 +21,4 @@ from app.models.face import FaceEmbedding  # noqa: F401
 from app.models.activity_log import ActivityLog  # noqa: F401
 from app.models.studio_portfolio import StudioPortfolioImage  # noqa: F401
 from app.models.studio_backup import StudioBackup  # noqa: F401
+from app.models.job import Job  # noqa: F401

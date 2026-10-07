@@ -5,6 +5,12 @@ import 'package:dio/dio.dart';
 ///
 /// This is designed to mirror the Album/Folder repository style while
 /// keeping a clean CRUD API for later Phase UI screens.
+class MediaPage {
+  final List<MediaModel> data;
+  final String? cursor;
+  MediaPage({required this.data, this.cursor});
+}
+
 abstract class MediaRepository {
   /// All filter params are optional and default to "no filter" so
   /// every existing `fetchMedia()` call site keeps working unchanged.
@@ -18,6 +24,28 @@ abstract class MediaRepository {
     bool favoritesOnly = false,
     String? likedByClientId,
   });
+
+  Future<MediaPage> fetchMediaPage({
+    String? albumId,
+    String? folderId,
+    bool unfiledOnly = false,
+    MediaType? type,
+    bool favoritesOnly = false,
+    String? likedByClientId,
+    int? pageSize,
+    String? cursor,
+  }) async {
+    final list = await fetchMedia(
+      albumId: albumId,
+      folderId: folderId,
+      unfiledOnly: unfiledOnly,
+      type: type,
+      favoritesOnly: favoritesOnly,
+      likedByClientId: likedByClientId,
+    );
+    return MediaPage(data: list);
+  }
+
 
   Future<MediaModel> createMedia(MediaModel media);
 
@@ -99,6 +127,8 @@ abstract class MediaRepository {
   Future<void> permanentlyDeleteMedia(String id);
 
   Future<void> emptyTrash();
+
+  Future<Map<String, int>> fetchMediaCounts();
 }
 
 /// How to handle duplicate [MediaModel.fileName] in the destination when

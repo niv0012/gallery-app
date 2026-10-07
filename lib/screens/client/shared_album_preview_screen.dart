@@ -322,7 +322,9 @@ class _SharedAlbumPreviewScreenState
 
     if (_error != null && _mediaList.isEmpty) {
       final isNotFound = _error!.contains('404') ||
-          _error!.toLowerCase().contains('not found');
+          _error!.contains('410') ||
+          _error!.toLowerCase().contains('not found') ||
+          _error!.toLowerCase().contains('revoked');
       final message = isNotFound
           ? 'This shared gallery is no longer available.'
           : 'Unable to load gallery photos. Check your connection and try again.';

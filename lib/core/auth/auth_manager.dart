@@ -9,6 +9,7 @@ class AuthManager extends ChangeNotifier {
   String? _accessToken;
   String? _refreshToken;
   bool _isSessionExpired = false;
+  bool _disposed = false;
 
   String? get accessToken => _accessToken;
   String? get refreshToken => _refreshToken;
@@ -23,7 +24,7 @@ class AuthManager extends ChangeNotifier {
     _accessToken = await _secureStorage.getAccessToken();
     _refreshToken = await _secureStorage.getRefreshToken();
     _isSessionExpired = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void setTokens({required String accessToken, required String? refreshToken}) {
@@ -32,7 +33,7 @@ class AuthManager extends ChangeNotifier {
       _refreshToken = refreshToken;
     }
     _isSessionExpired = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   Future<void> handleSessionExpired() async {
@@ -41,7 +42,7 @@ class AuthManager extends ChangeNotifier {
     _isSessionExpired = true;
     await _secureStorage.clearTokens();
     await _secureStorage.clearRememberMe();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   Future<void> logout() async {
@@ -50,6 +51,12 @@ class AuthManager extends ChangeNotifier {
     _isSessionExpired = false;
     await _secureStorage.clearTokens();
     await _secureStorage.clearRememberMe();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
+  }
+  
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }

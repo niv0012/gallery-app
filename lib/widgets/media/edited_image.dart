@@ -71,28 +71,36 @@ class _EditedImageState extends State<EditedImage> {
       try {
         final ImageStream stream =
             NetworkImage(filePath).resolve(ImageConfiguration.empty);
-        final Completer<ui.Image> completer = Completer<ui.Image>();
         late ImageStreamListener listener;
         listener = ImageStreamListener(
-          (ImageInfo info, bool _) {
-            if (!completer.isCompleted) completer.complete(info.image);
+          (ImageInfo info, bool synchronousCall) {
+            if (mounted) {
+              if (synchronousCall) {
+                _image = info.image;
+                _error = false;
+                _loading = false;
+              } else {
+                setState(() {
+                  _image = info.image;
+                  _error = false;
+                  _loading = false;
+                });
+              }
+            }
             stream.removeListener(listener);
           },
           onError: (Object error, StackTrace? stackTrace) {
-            if (!completer.isCompleted) completer.completeError(error);
+            debugPrint('Error loading network image in EditedImage: $error');
+            if (mounted) {
+              setState(() {
+                _error = true;
+                _loading = false;
+              });
+            }
             stream.removeListener(listener);
           },
         );
         stream.addListener(listener);
-        final image = await completer.future;
-
-        if (mounted) {
-          setState(() {
-            _image = image;
-            _error = false;
-            _loading = false;
-          });
-        }
         return;
       } catch (e) {
         debugPrint('Error loading network image in EditedImage: $e');

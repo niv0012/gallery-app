@@ -93,8 +93,6 @@ class ClientDrawer extends ConsumerWidget {
     final pendingInviteCount = connections
         .where((c) => c.status == ConnectionStatus.pendingStudioRequest)
         .length;
-    final connectedStudioCount =
-        connections.where((c) => c.status == ConnectionStatus.connected).length;
 
     final client =
         clientNotifier.findByEmail(authUser?.email ?? settings.email);

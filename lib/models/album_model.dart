@@ -15,6 +15,9 @@ class AlbumModel {
   /// ("created this month", etc.) and is independent from [updatedAt].
   final DateTime createdAt;
 
+  /// Soft deletion timestamp. Null if active.
+  final DateTime? deletedAt;
+
   /// Used to compute "Recent Albums".
   final DateTime updatedAt;
 
@@ -88,6 +91,7 @@ class AlbumModel {
     this.studioAvatarUrl,
     this.hasProtectedShareLink = false,
     this.showWatermark = false,
+    this.deletedAt,
   })  : createdAt = createdAt ?? updatedAt,
         gradient = gradient ??
             const [
@@ -116,6 +120,7 @@ class AlbumModel {
         (json['gradient_argb'] as List<dynamic>?)?.cast<int>(),
       ),
       coverThumbnailUrl: json['cover_thumbnail_url'] as String?,
+      deletedAt: json['deleted_at'] != null ? DateTime.parse(json['deleted_at'] as String) : null,
     );
   }
 
@@ -147,6 +152,7 @@ class AlbumModel {
       studioAvatarUrl: json['studio_avatar_url'] as String?,
       hasProtectedShareLink: json['has_protected_share_link'] as bool? ?? false,
       showWatermark: json['show_watermark'] as bool? ?? false,
+      deletedAt: json['deleted_at'] != null ? DateTime.parse(json['deleted_at'] as String) : null,
     );
   }
 
@@ -201,6 +207,7 @@ class AlbumModel {
       gradient: _gradientFromArgb(
         (json['gradientArgb'] as List<dynamic>?)?.cast<int>(),
       ),
+      deletedAt: json['deletedAt'] != null ? DateTime.parse(json['deletedAt'] as String) : null,
     );
   }
 
@@ -218,6 +225,7 @@ class AlbumModel {
         'isFavorite': isFavorite,
         'folderId': folderId,
         'gradientArgb': gradient.map((c) => c.toARGB32()).toList(),
+        'deletedAt': deletedAt?.toIso8601String(),
       };
 
   AlbumModel copyWith({
@@ -240,6 +248,7 @@ class AlbumModel {
     String? studioName,
     String? studioAvatarUrl,
     bool? hasProtectedShareLink,
+    DateTime? deletedAt,
   }) {
     return AlbumModel(
       id: id ?? this.id,
@@ -260,6 +269,7 @@ class AlbumModel {
       studioAvatarUrl: studioAvatarUrl ?? this.studioAvatarUrl,
       hasProtectedShareLink:
           hasProtectedShareLink ?? this.hasProtectedShareLink,
+      deletedAt: deletedAt ?? this.deletedAt,
     );
   }
 }

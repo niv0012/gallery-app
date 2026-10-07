@@ -16,7 +16,7 @@ final secureStorageProvider = Provider<SecureStorage>((ref) => SecureStorage());
 
 final authManagerProvider = ChangeNotifierProvider<AuthManager>((ref) {
   final manager = AuthManager(secureStorage: ref.watch(secureStorageProvider));
-  manager.initSession();
+  Future.microtask(manager.initSession);
   return manager;
 });
 

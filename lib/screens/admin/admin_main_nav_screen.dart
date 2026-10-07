@@ -29,7 +29,7 @@ class AdminMainNavScreen extends ConsumerStatefulWidget {
 }
 
 class _AdminMainNavScreenState extends ConsumerState<AdminMainNavScreen> {
-  int _navIndex = 0;
+  int _navIndex = 1;
 
   void _goToTab(int index) {
     setState(() => _navIndex = index);

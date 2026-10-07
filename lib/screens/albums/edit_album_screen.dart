@@ -11,6 +11,8 @@ import '../../widgets/buttons/gradient_button.dart';
 import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/anchored_dropdown_field.dart';
 import '../../widgets/inputs/custom_text_field.dart';
+import '../../repositories/album_repository.dart';
+import '../../widgets/folders/safe_delete_dialog.dart';
 
 /// Admin-only Edit Album — reached from [AlbumDetailsScreen]. Mirrors
 /// [RenameFolderScreen] / [MoveFolderScreen]'s validated-form + `_initialized`
@@ -93,36 +95,22 @@ class _EditAlbumScreenState extends ConsumerState<EditAlbumScreen> {
   }
 
   Future<void> _confirmDelete(AlbumModel album) async {
-    final confirmed = await showDialog<bool>(
+    final albumRepo = ref.read(albumRepositoryProvider);
+    final mode = await showSafeDeleteDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Delete Album?'),
-        content: Text(
-            'This will permanently remove "${album.name}" and its ${album.photoCount} photos. This can\'t be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('Delete'),
-          ),
-        ],
-      ),
+      itemName: album.name,
+      getPreview: (mode) => albumRepo.previewDeleteAlbum(album.id, mode: mode),
     );
-    if (confirmed != true) return;
+
+    if (mode == null) return;
 
     setState(() => _isDeleting = true);
     try {
-      await ref.read(albumProvider).deleteAlbum(album.id);
+      await ref.read(albumProvider).deleteAlbum(album.id, mode: mode);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('"${album.name}" deleted')),
       );
-      // Edit was pushed from Details, which was pushed from the list —
-      // two pops lands back on the list, same as Folder Settings' delete.
       final nav = Navigator.of(context);
       nav.pop();
       if (nav.canPop()) nav.pop();

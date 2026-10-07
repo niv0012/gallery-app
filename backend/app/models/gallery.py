@@ -50,6 +50,17 @@ class DownloadSource(str, enum.Enum):
     share_link = "share_link"
 
 
+class ShareLinkKind(str, enum.Enum):
+    """Phase 5: kind of share link.
+    - standard: normal link to folders/albums.
+    - face_search: requires face search to view.
+    - selection: explicit subset of media (e.g. 'Send me my photos').
+    """
+    standard = "standard"
+    face_search = "face_search"
+    selection = "selection"
+
+
 class Folder(Base):
     __tablename__ = "folders"
 
@@ -64,6 +75,9 @@ class Folder(Base):
     gradient_argb: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_favorite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    allow_download: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    show_watermark: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -86,6 +100,7 @@ class Album(Base):
     display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_favorite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     gradient_argb: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -134,13 +149,25 @@ class Media(Base):
 
 
 class ShareLink(Base):
-    """A public, revocable link exposing exactly one Album for client
-    viewing without an account (Task 20)."""
+    """A public, revocable link exposing one or more Albums for client
+    viewing without an account.
+
+    Phase 3 additions (M4/5.2):
+    - `source_folder_id`: when set, the link covers all (non-hidden) albums
+      in this folder. Albums are tracked in `share_link_albums`.
+    - `auto_include_new`: when True and `source_folder_id` is set, newly
+      created albums in that folder are automatically added to the link.
+    - `album_id` / `collection_id` remain for backwards-compatibility with
+      the old app (v1.0.0+42); the check constraint is relaxed to allow all
+      three target columns to be null (multi-album mode uses share_link_albums).
+    """
 
     __tablename__ = "share_links"
     __table_args__ = (
         CheckConstraint(
-            "(album_id IS NOT NULL AND collection_id IS NULL) OR (album_id IS NULL AND collection_id IS NOT NULL)",
+            "(album_id IS NOT NULL AND source_folder_id IS NULL)"
+            " OR (album_id IS NULL AND source_folder_id IS NOT NULL)"
+            " OR (album_id IS NULL AND source_folder_id IS NULL)",
             name="chk_share_link_target",
         ),
     )
@@ -152,14 +179,12 @@ class ShareLink(Base):
     album_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("albums.id", ondelete="CASCADE"), nullable=True, index=True
     )
-    collection_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("gallery_collections.id", ondelete="CASCADE"), nullable=True, index=True
-    )
     token: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
     client_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    pin_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     allow_download: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     show_watermark: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -168,6 +193,22 @@ class ShareLink(Base):
     downloads_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_viewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_downloaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Phase 3 multi-album columns
+    source_folder_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("folders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    auto_include_new: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    # Phase 6: folder-level sharing options (m13)
+    # include_all: share everything in the folder subtree, evaluated live.
+    # include_folder_items: also share loose items (album_id IS NULL) directly in source_folder_id.
+    include_all: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    include_folder_items: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+
+    # Phase 5: kind of link
+    kind: Mapped[ShareLinkKind] = mapped_column(
+        Enum(ShareLinkKind, name="share_link_kind", create_type=False), nullable=False, server_default="standard"
+    )
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -175,45 +216,114 @@ class ShareLink(Base):
     )
 
 
-class GalleryCollection(Base):
-    """An ordered grouping of Albums (Task 21) — studio-side only, no
-    client-facing share concept attached (see the 21.21/21.22 audit)."""
+class ShareLinkAlbum(Base):
+    """Many-to-many join table: which albums are included in a multi-album
+    share link. A link with `source_folder_id` will have one row per
+    album in that folder that was selected by the studio.
 
-    __tablename__ = "gallery_collections"
+    Phase 3 (M4). Backwards-compatible: old single-album links continue
+    to use `album_id` on the ShareLink row itself.
+    """
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    owner_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    name: Mapped[str] = mapped_column(String(150), nullable=False)
-    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
-
-
-class CollectionItem(Base):
-    """Join table giving each (collection, album) membership an
-    explicit order via `position`. `UniqueConstraint` prevents adding
-    the same album to a collection twice."""
-
-    __tablename__ = "collection_items"
+    __tablename__ = "share_link_albums"
     __table_args__ = (
-        UniqueConstraint("collection_id", "album_id", name="uq_collection_items_collection_album"),
+        UniqueConstraint("share_link_id", "album_id", name="uq_share_link_albums_link_album"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    collection_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("gallery_collections.id", ondelete="CASCADE"), nullable=False, index=True
+    share_link_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("share_links.id", ondelete="CASCADE"), nullable=False, index=True
     )
     album_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("albums.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # display_order allows the studio to reorder tabs on the client view
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ShareLinkFolder(Base):
+    """Many-to-many join: which sub-folders are explicitly included in a
+    folder share link. Each row means 'include everything inside this
+    folder (albums, loose media, deeper sub-folders)' subject to
+    is_visible_to_client checks.
+
+    Phase 6 (m13). Not used when include_all is True.
+    """
+
+    __tablename__ = "share_link_folders"
+    __table_args__ = (
+        UniqueConstraint("share_link_id", "folder_id", name="uq_share_link_folders_link_folder"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    share_link_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("share_links.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    folder_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("folders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ShareLinkMedia(Base):
+    """Mapping table for selection-based share links (Phase 5).
+    Allows a share link to expose a specific subset of media items
+    (e.g., 'Send me my photos' results).
+    """
+
+    __tablename__ = "share_link_media"
+    __table_args__ = (
+        UniqueConstraint("share_link_id", "media_id", name="uq_share_link_media_link_media"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    share_link_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("share_links.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    media_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("media.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class FaceSearchAttempt(Base):
+    """Rate limiting table for face searches (Task 1.4)."""
+    __tablename__ = "face_search_attempts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    share_link_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("share_links.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    ip_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class ShareLinkPinAttempt(Base):
+    """Rate limiting table for PIN attempts (Task 3.2)."""
+    __tablename__ = "share_link_pin_attempts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    share_link_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("share_links.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    ip_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+
+class FaceSearchEmail(Base):
+    """Stores the email/phone required for face searches (Task 5.1)."""
+    __tablename__ = "face_search_emails"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    share_link_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("share_links.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 
 class DownloadEvent(Base):
@@ -310,4 +420,42 @@ class GalleryViewEvent(Base):
     viewer_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    viewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    viewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class ShareLinkEventType(enum.Enum):
+    view = "view"
+    download = "download"
+    face_search = "face_search"
+    favourite = "favourite"
+    email_submit = "email_submit"
+
+
+class ShareLinkEvent(Base):
+    __tablename__ = "share_link_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    share_link_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("share_links.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    event_type: Mapped[ShareLinkEventType] = mapped_column(Enum(ShareLinkEventType, name="share_link_event_type"), nullable=False)
+    ip_address: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class ShareLinkFavourite(Base):
+    """Guest-level 'hearts' (favourites) on a share link (Phase 5, Task 9.2)."""
+    __tablename__ = "share_link_favourites"
+    __table_args__ = (UniqueConstraint("share_link_id", "media_id", "guest_identifier", name="uq_sl_favourite_link_media_guest"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    share_link_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("share_links.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    media_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("media.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # E.g. session token, email, or name the guest entered
+    guest_identifier: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)

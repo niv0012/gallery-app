@@ -120,4 +120,28 @@ class ResponsiveUtils {
     if (maxWidth >= 420) return 3;
     return 2;
   }
+
+  /// Column count for Explorer-style grids (albums / folders) on WIDE
+  /// windows. Instead of the phone-tuned fixed 2 / 3-4 / 6 columns —
+  /// which turns "Large icons" into a couple of enormous tiles on a
+  /// 1400px browser window — pick as many columns as fit the
+  /// [targetTileWidth] for the chosen icon size.
+  static int columnsForTileWidth(
+    double maxWidth,
+    double targetTileWidth, {
+    int minColumns = 2,
+    int maxColumns = 12,
+  }) {
+    final cols = (maxWidth / targetTileWidth).floor();
+    return cols.clamp(minColumns, maxColumns);
+  }
+
+  /// Widest a gallery grid is allowed to grow before it's centered with
+  /// side margins (keeps ultra-wide monitors from stretching tiles).
+  static const double galleryMaxWidth = 1800;
+
+  /// Target tile widths (dp) for Large / Medium / Small icon views.
+  static const double tileLarge = 240;
+  static const double tileMedium = 160;
+  static const double tileSmall = 100;
 }

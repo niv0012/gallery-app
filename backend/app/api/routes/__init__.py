@@ -10,7 +10,7 @@ from app.api.routes import (
     chunked_upload,
     client_faces,
     client_gallery,
-    collections,
+    config,
     connections,
     download_history,
     faces,
@@ -24,6 +24,7 @@ from app.api.routes import (
     studio_shares,
     studios,
     users,
+    zip_jobs,
 )
 
 api_router = APIRouter()
@@ -37,7 +38,6 @@ api_router.include_router(faces.router)
 api_router.include_router(share_links.router)
 api_router.include_router(share_links.public_router)
 api_router.include_router(share_links.public_galleries_router)
-api_router.include_router(collections.router)
 api_router.include_router(download_history.router)
 api_router.include_router(studios.router)
 api_router.include_router(studio_shares.router)
@@ -51,3 +51,5 @@ api_router.include_router(admin_dashboard.router)
 api_router.include_router(search.router)
 api_router.include_router(notifications.router)
 api_router.include_router(activity_log.router)
+api_router.include_router(config.router)
+api_router.include_router(zip_jobs.router)

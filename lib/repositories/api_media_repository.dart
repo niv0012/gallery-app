@@ -77,8 +77,40 @@ class ApiMediaRepository implements MediaRepository {
     final path = query.isEmpty
         ? '/media'
         : '/media?${Uri(queryParameters: query).query}';
-    final json = await _apiClient.get(path);
+    final json = await _apiClient.get(path, receiveTimeout: const Duration(seconds: 30));
     return _mapList(json);
+  }
+
+  @override
+  Future<MediaPage> fetchMediaPage({
+    String? albumId,
+    String? folderId,
+    bool unfiledOnly = false,
+    MediaType? type,
+    bool favoritesOnly = false,
+    String? likedByClientId,
+    int? pageSize,
+    String? cursor,
+  }) async {
+    final query = <String, String>{
+      if (unfiledOnly) 'unfiled_only': 'true',
+      if (!unfiledOnly && albumId != null) 'album_id': albumId,
+      if (!unfiledOnly && folderId != null) 'folder_id': folderId,
+      if (type != null) 'media_type': type.name,
+      if (favoritesOnly) 'favorites_only': 'true',
+      if (likedByClientId != null) 'liked_by_client_id': likedByClientId,
+      if (pageSize != null) 'page_size': pageSize.toString(),
+      if (cursor != null) 'cursor': cursor,
+    };
+    final path = query.isEmpty
+        ? '/media/page'
+        : '/media/page?${Uri(queryParameters: query).query}';
+    final json = await _apiClient.get(path, receiveTimeout: const Duration(seconds: 30));
+    final map = json as Map<String, dynamic>;
+    return MediaPage(
+      data: _mapList(map['items']),
+      cursor: map['next_cursor'] as String?,
+    );
   }
 
   @override
@@ -319,5 +351,15 @@ class ApiMediaRepository implements MediaRepository {
   @override
   Future<void> emptyTrash() async {
     await _apiClient.delete('/media/trash/empty');
+  }
+
+  @override
+  Future<Map<String, int>> fetchMediaCounts() async {
+    final json = await _apiClient.get('/media/counts');
+    return {
+      'photo_count': (json['total_photos'] ?? json['photo_count']) as int? ?? 0,
+      'video_count': (json['total_videos'] ?? json['video_count']) as int? ?? 0,
+      'total_size_bytes': json['total_size_bytes'] as int? ?? 0,
+    };
   }
 }

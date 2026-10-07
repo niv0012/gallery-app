@@ -5,6 +5,7 @@ import '../core/utils/app_exceptions.dart';
 import '../core/utils/validators.dart';
 import '../models/album_model.dart';
 import '../models/folder_model.dart';
+import '../models/delete_preview_model.dart';
 import '../models/stats_models.dart';
 import '../repositories/folder_repository.dart';
 import 'album_provider.dart';
@@ -361,6 +362,21 @@ class FolderNotifier extends AsyncNotifier<FolderState> {
     await _updateFolder(id, (f) => f.copyWith(isHidden: isHidden));
   }
 
+  /// Updates the folder's own download/watermark rule (null = inherit).
+  Future<void> setRules(
+    String id, {
+    required bool? allowDownload,
+    required bool? showWatermark,
+  }) async {
+    await _updateFolder(
+      id,
+      (f) => f.copyWith(
+        allowDownload: allowDownload,
+        showWatermark: showWatermark,
+      ),
+    );
+  }
+
   Future<void> toggleFavorite(String id) async {
     final folder = folderById(id);
     if (folder == null) return;
@@ -368,46 +384,21 @@ class FolderNotifier extends AsyncNotifier<FolderState> {
     await _updateFolder(id, (f) => f.copyWith(isFavorite: !f.isFavorite));
   }
 
-  /// Deletes a folder. Child folders are re-parented one level up.
-  /// Any albums filed directly under it are unfiled (never deleted).
-  Future<void> deleteFolder(String id) async {
+  /// Deletes a folder according to the requested DeleteMode.
+  Future<void> deleteFolder(String id, {DeleteMode mode = DeleteMode.moveUp}) async {
     final folder = folderById(id);
     if (folder == null) {
       throw NotFoundException('Folder "$id" no longer exists');
     }
 
-    final current = state.value ?? _empty();
-    final children = current.allFolders.where((f) => f.parentId == id).toList();
+    await _repo.deleteFolder(id, mode: mode);
 
-    for (final child in children) {
-      await _updateFolder(
-        child.id,
-        (f) => f.copyWith(
-          parentId: folder.parentId,
-          clearParent: folder.parentId == null,
-        ),
-      );
-    }
-
-    await _repo.deleteFolder(id);
-
-    final next =
-        (state.value ?? _empty()).allFolders.where((f) => f.id != id).toList();
-
-    state = AsyncValue.data(
-      (state.value ?? _empty()).copyWith(
-        allFolders: next,
-        lastError: null,
-        isLoading: false,
-      ),
-    );
-
-    // Unfile (never delete) any albums that were filed directly here.
+    // Refresh everything because the backend handles cascading/reparenting now.
+    ref.invalidateSelf();
+    await future;
     try {
-      ref.read(albumProvider).clearFolderAssignment(id);
-    } catch (_) {
-      // Safe to ignore in isolated tests; counts reconcile on next load.
-    }
+      ref.invalidate(albumProvider);
+    } catch (_) {}
   }
 
   // ---------------------------------------------------------------------
@@ -599,8 +590,15 @@ class FolderFacade {
       _notifier.moveFolder(id, newParentId);
   Future<void> setHidden(String id, bool isHidden) =>
       _notifier.setHidden(id, isHidden);
+  Future<void> setRules(
+    String id, {
+    required bool? allowDownload,
+    required bool? showWatermark,
+  }) =>
+      _notifier.setRules(id, allowDownload: allowDownload, showWatermark: showWatermark);
   Future<void> toggleFavorite(String id) => _notifier.toggleFavorite(id);
-  Future<void> deleteFolder(String id) => _notifier.deleteFolder(id);
+  Future<void> deleteFolder(String id, {DeleteMode mode = DeleteMode.moveUp}) =>
+      _notifier.deleteFolder(id, mode: mode);
 
   void recomputeAlbumCounts(List<AlbumModel> albums) =>
       _notifier.recomputeAlbumCounts(albums);
@@ -630,3 +628,19 @@ final folderProvider = Provider<FolderFacade>((ref) {
 
   return FolderFacade(notifier, value);
 });
+
+/// Fetches the effective (ancestor-resolved) allow_download / show_watermark
+/// for [folderId] from `GET /folders/{id}/effective-rules`.
+///
+/// Returned map keys:
+///   own_allow_download       bool?  – explicitly set on this folder (null = inherit)
+///   own_show_watermark       bool?  – explicitly set on this folder (null = inherit)
+///   effective_allow_download bool   – resolved value
+///   effective_show_watermark bool   – resolved value
+final folderEffectiveRulesProvider =
+    FutureProvider.autoDispose.family<Map<String, dynamic>, String>(
+  (ref, folderId) async {
+    final repo = ref.watch(folderRepositoryProvider);
+    return repo.fetchEffectiveRules(folderId);
+  },
+);

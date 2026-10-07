@@ -1,5 +1,6 @@
 import logging
 import uuid
+from typing import Any
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -24,7 +25,10 @@ from app.core.storage import (
     replace_media_original,
     restore_media_original,
     save_upload,
+    get_signed_original_url,
 )
+from app.core.rules import get_effective_rules
+from app.core.visibility import is_visible_to_client
 from app.db.session import get_db
 from app.models.activity_log import ActivityType
 from app.models.album_share import AlbumClientShare
@@ -40,6 +44,8 @@ from app.schemas.gallery import (
     MediaLikeToggleResponse,
     MediaRead,
     MediaUpdate,
+    MediaPageRead,
+    MediaCountsRead,
 )
 from app.schemas.user import MessageResponse
 
@@ -99,6 +105,9 @@ def _get_accessible_media(db: Session, media_id: uuid.UUID, current_user: User) 
     ).scalars().first() is not None
 
     if not (has_connection or has_share):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media not found")
+
+    if not is_visible_to_client(db, album_id=media.album_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media not found")
 
     return media
@@ -169,11 +178,11 @@ def upload_media(
     """
     if album_id is not None:
         album = db.get(Album, album_id)
-        if album is None or album.owner_id != current_user.id:
+        if album is None or album.owner_id != current_user.id or getattr(album, "deleted_at", None) is not None:
             raise HTTPException(status_code=404, detail="Album not found")
     if folder_id is not None:
         folder = db.get(Folder, folder_id)
-        if folder is None or folder.owner_id != current_user.id:
+        if folder is None or folder.owner_id != current_user.id or getattr(folder, "deleted_at", None) is not None:
             raise HTTPException(status_code=404, detail="Folder not found")
 
     content_type = file.content_type or ""
@@ -312,11 +321,11 @@ def copy_media(
 
     if album_id is not None:
         album = db.get(Album, album_id)
-        if album is None or album.owner_id != current_user.id:
+        if album is None or album.owner_id != current_user.id or getattr(album, "deleted_at", None) is not None:
             raise HTTPException(status_code=404, detail="Album not found")
     if folder_id is not None:
         folder = db.get(Folder, folder_id)
-        if folder is None or folder.owner_id != current_user.id:
+        if folder is None or folder.owner_id != current_user.id or getattr(folder, "deleted_at", None) is not None:
             raise HTTPException(status_code=404, detail="Folder not found")
 
     dest_album_id = album_id if album_id is not None else source.album_id
@@ -396,6 +405,35 @@ def copy_media(
     return MediaRead.from_model(copy)
 
 
+@router.get("/counts", response_model=MediaCountsRead)
+def count_media(
+    album_id: uuid.UUID | None = None,
+    folder_id: uuid.UUID | None = None,
+    unfiled_only: bool = False,
+    trashed: bool = False,
+    current_user: User = Depends(get_current_studio_user),
+    db: Session = Depends(get_db),
+) -> MediaCountsRead:
+    query = select(
+        sa.func.sum(sa.case((Media.media_type == MediaType.photo, 1), else_=0)),
+        sa.func.sum(sa.case((Media.media_type == MediaType.video, 1), else_=0)),
+    ).where(Media.owner_id == current_user.id, Media.is_deleted.is_(trashed))
+    
+    if unfiled_only:
+        query = query.where(Media.album_id.is_(None), Media.folder_id.is_(None))
+    else:
+        if album_id is not None:
+            query = query.where(Media.album_id == album_id)
+        if folder_id is not None:
+            query = query.where(Media.folder_id == folder_id)
+
+    row = db.execute(query).first()
+    return MediaCountsRead(
+        total_photos=int(row[0] or 0) if row else 0,
+        total_videos=int(row[1] or 0) if row else 0,
+    )
+
+
 @router.get("", response_model=list[MediaRead])
 def list_media(
     album_id: uuid.UUID | None = None,
@@ -405,12 +443,22 @@ def list_media(
     favorites_only: bool = False,
     liked_by_client_id: uuid.UUID | None = None,
     trashed: bool = False,
-    limit: int = Query(default=50000),
-    offset: int = 0,
+    cursor: str | None = Query(default=None),
+    page_size: int | None = Query(default=None),
     current_user: User = Depends(get_current_studio_user),
     db: Session = Depends(get_db),
 ) -> list[MediaRead]:
+    """Returns a flat list of MediaRead items. The `cursor` and `page_size`
+    params still work for pagination — pass the returned next offset as
+    `cursor` on the next call — but the response shape is always a plain
+    JSON array so Flutter callers can cast it directly as List<dynamic>.
+    Use GET /media/page for the full paginated envelope {items, total_count,
+    next_cursor} if you need it.
+    """
+    actual_offset = int(cursor) if cursor is not None and cursor.isdigit() else 0
+    
     query = select(Media).where(Media.owner_id == current_user.id, Media.is_deleted.is_(trashed))
+    
     if unfiled_only:
         query = query.where(Media.album_id.is_(None), Media.folder_id.is_(None))
     else:
@@ -418,6 +466,7 @@ def list_media(
             query = query.where(Media.album_id == album_id)
         if folder_id is not None:
             query = query.where(Media.folder_id == folder_id)
+            
     if media_type is not None:
         query = query.where(Media.media_type == media_type)
     if favorites_only:
@@ -425,7 +474,12 @@ def list_media(
     if liked_by_client_id is not None:
         query = query.join(MediaLike, MediaLike.media_id == Media.id).where(MediaLike.user_id == liked_by_client_id)
 
-    query = query.order_by(Media.created_at.desc()).limit(limit).offset(offset)
+    query = query.order_by(Media.created_at.desc())
+    if page_size is not None:
+        query = query.limit(page_size)
+    if actual_offset > 0:
+        query = query.offset(actual_offset)
+    
     items = db.execute(query).scalars().all()
 
     counts, liked = _like_info_for(db, [m.id for m in items], current_user.id)
@@ -439,6 +493,78 @@ def list_media(
         )
         for m in items
     ]
+
+
+@router.get("/page", response_model=MediaPageRead)
+def list_media_page(
+    album_id: uuid.UUID | None = None,
+    folder_id: uuid.UUID | None = None,
+    unfiled_only: bool = False,
+    media_type: MediaType | None = None,
+    favorites_only: bool = False,
+    liked_by_client_id: uuid.UUID | None = None,
+    trashed: bool = False,
+    cursor: str | None = Query(default=None),
+    page_size: int | None = Query(default=None),
+    current_user: User = Depends(get_current_studio_user),
+    db: Session = Depends(get_db),
+) -> MediaPageRead:
+    """Paginated envelope variant of GET /media. Returns
+    {items, total_count, next_cursor} for callers that need the full
+    pagination metadata.
+    """
+    actual_offset = int(cursor) if cursor is not None and cursor.isdigit() else 0
+    
+    query = select(Media).where(Media.owner_id == current_user.id, Media.is_deleted.is_(trashed))
+    count_query = select(sa.func.count()).where(Media.owner_id == current_user.id, Media.is_deleted.is_(trashed))
+    
+    if unfiled_only:
+        query = query.where(Media.album_id.is_(None), Media.folder_id.is_(None))
+        count_query = count_query.where(Media.album_id.is_(None), Media.folder_id.is_(None))
+    else:
+        if album_id is not None:
+            query = query.where(Media.album_id == album_id)
+            count_query = count_query.where(Media.album_id == album_id)
+        if folder_id is not None:
+            query = query.where(Media.folder_id == folder_id)
+            count_query = count_query.where(Media.folder_id == folder_id)
+            
+    if media_type is not None:
+        query = query.where(Media.media_type == media_type)
+        count_query = count_query.where(Media.media_type == media_type)
+    if favorites_only:
+        query = query.where(Media.is_favorite.is_(True))
+        count_query = count_query.where(Media.is_favorite.is_(True))
+    if liked_by_client_id is not None:
+        query = query.join(MediaLike, MediaLike.media_id == Media.id).where(MediaLike.user_id == liked_by_client_id)
+        count_query = count_query.join(MediaLike, MediaLike.media_id == Media.id).where(MediaLike.user_id == liked_by_client_id)
+
+    query = query.order_by(Media.created_at.desc())
+    if page_size is not None:
+        query = query.limit(page_size)
+    if actual_offset > 0:
+        query = query.offset(actual_offset)
+    
+    items = db.execute(query).scalars().all()
+
+    counts, liked = _like_info_for(db, [m.id for m in items], current_user.id)
+    comment_counts = _comment_count_for(db, [m.id for m in items])
+    media_reads = [
+        MediaRead.from_model(
+            m,
+            like_count=counts.get(m.id, 0),
+            is_liked_by_me=m.id in liked,
+            comment_count=comment_counts.get(m.id, 0),
+        )
+        for m in items
+    ]
+    
+    total_count = db.execute(count_query).scalar() or 0
+    next_cursor = None
+    if page_size is not None and actual_offset + page_size < total_count:
+        next_cursor = str(actual_offset + page_size)
+    
+    return MediaPageRead(items=media_reads, total_count=total_count, next_cursor=next_cursor)
 
 
 @router.get("/liked-by-me", response_model=list[MediaRead])
@@ -512,6 +638,7 @@ def list_liked_media(
                 media_by_id[mid].owner_id in connected_studio_ids
                 or media_by_id[mid].album_id in shared_album_ids
             )
+            and is_visible_to_client(db, album_id=media_by_id[mid].album_id)
         ]
 
     # Keep this endpoint's own most-recently-liked ordering rather than
@@ -570,7 +697,7 @@ def update_media(
         media.album_id = None
     elif "album_id" in updates and updates["album_id"] is not None:
         album = db.get(Album, updates["album_id"])
-        if album is None or album.owner_id != current_user.id:
+        if album is None or album.owner_id != current_user.id or getattr(album, "deleted_at", None) is not None:
             raise HTTPException(status_code=404, detail="Album not found")
         media.album_id = updates["album_id"]
 
@@ -578,7 +705,7 @@ def update_media(
         media.folder_id = None
     elif "folder_id" in updates and updates["folder_id"] is not None:
         folder = db.get(Folder, updates["folder_id"])
-        if folder is None or folder.owner_id != current_user.id:
+        if folder is None or folder.owner_id != current_user.id or getattr(folder, "deleted_at", None) is not None:
             raise HTTPException(status_code=404, detail="Folder not found")
         media.folder_id = updates["folder_id"]
 
@@ -966,6 +1093,34 @@ def create_comment(
     db.refresh(comment)
 
     return MediaCommentRead.from_model(comment, user_full_name=current_user.full_name)
+
+
+@router.get("/{media_id}/original-url")
+def get_media_original_url(
+    media_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Returns a short-lived presigned URL (or static local URL) for downloading
+    the uncompressed original file. Clients check folder rules; studios bypass them.
+    """
+    media = _get_accessible_media(db, media_id, current_user)
+    
+    if current_user.role == UserRole.client and current_user.id != media.owner_id:
+        album = db.get(Album, media.album_id) if media.album_id else None
+        folder_id = album.folder_id if album else None
+        effective_rules = get_effective_rules(db, folder_id, None)
+        if not effective_rules["allow_download"] or effective_rules["show_watermark"]:
+            raise HTTPException(
+                status_code=403, 
+                detail="Original downloads are disabled or watermark is enabled for this photo."
+            )
+
+    url = get_signed_original_url(media.file_path)
+    if not url:
+        raise HTTPException(status_code=404, detail="Original file not found")
+    return {"url": url}
+
 
 
 @router.get("/{media_id}/comments", response_model=list[MediaCommentRead])

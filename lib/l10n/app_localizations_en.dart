@@ -9,7 +9,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appName => 'PicGallery';
+  String get appName => 'picgallery';
 
   @override
   String get home => 'Home';
@@ -76,4 +76,67 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get logOut => 'Log Out';
+
+  @override
+  String get folderExplorerMyFiles => 'My Files';
+
+  @override
+  String get folderExplorerManageFolders => 'Manage Folders';
+
+  @override
+  String get folderExplorerMenu => 'Folder explorer menu';
+
+  @override
+  String get folderExplorerAllAlbums => 'All Albums';
+
+  @override
+  String get folderExplorerEmpty => 'This folder is empty.';
+
+  @override
+  String get folderExplorerLoading => 'Loading contents…';
+
+  @override
+  String get folderExplorerGrid => 'Grid';
+
+  @override
+  String get folderExplorerList => 'List';
+
+  @override
+  String get folderExplorerDetails => 'Details';
+
+  @override
+  String get folderExplorerSortByName => 'Name';
+
+  @override
+  String get folderExplorerSortByDate => 'Date';
+
+  @override
+  String get folderExplorerSortByDateCreated => 'Date Created';
+
+  @override
+  String get folderExplorerSortBySize => 'Size';
+
+  @override
+  String get folderExplorerAscending => 'Ascending';
+
+  @override
+  String get folderExplorerDescending => 'Descending';
+
+  @override
+  String get folderExplorerLooseMedia => 'Loose Media';
+
+  @override
+  String get folderExplorerFolders => 'Folders';
+
+  @override
+  String get folderExplorerType => 'Type';
+
+  @override
+  String get folderExplorerItems => 'Items';
+
+  @override
+  String get uploadCompressLabel => 'Compress files before upload';
+
+  @override
+  String get uploadCompressSubtitle => 'Photos are resized to 2048 px at JPEG quality 85. Videos are not compressed.';
 }

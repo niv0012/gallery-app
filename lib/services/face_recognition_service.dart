@@ -72,6 +72,15 @@ class FaceSearchApiService {
     return _post(path, selfie, withAuth: true);
   }
 
+  Future<Map<String, dynamic>> getFaceIndexStatus({String? albumId, List<String>? albumIds}) async {
+    final query = <String, dynamic>{};
+    if (albumId != null) query['album_id'] = albumId;
+    if (albumIds != null && albumIds.isNotEmpty) query['album_ids'] = albumIds;
+    final path = '/faces/status${query.isEmpty ? '' : '?${Uri(queryParameters: query).query}'}';
+    final response = await _apiClient.get(path, withAuth: true);
+    return response.data as Map<String, dynamic>;
+  }
+
   /// "Find my photos" for a guest viewing a shared gallery — `POST
   /// /public/share-links/{token}/face-search`. No login required, same
   /// as viewing the shared gallery itself; [password] is only needed

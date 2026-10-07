@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_studio_user
 from app.core.storage import build_media_url
+from app.core.visibility import is_visible_to_client
 from app.db.session import get_db
 from app.models.album_share import AlbumClientShare
 from app.models.connection import ConnectionStatus, StudioClientConnection
@@ -118,6 +119,8 @@ def share_album(
     same convention as `favorite_studio`.
     """
     album = _get_owned_album(db, payload.album_id, current_user.id)
+    if not is_visible_to_client(db, album_id=album.id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot share a hidden album.")
     _require_connected_client(db, current_user.id, payload.client_id)
 
     share, created = _get_or_reactivate_share(
@@ -168,10 +171,12 @@ def share_folder(
     scopes "albums in this folder" elsewhere in the app.
     """
     folder = _get_owned_folder(db, payload.folder_id, current_user.id)
+    if not is_visible_to_client(db, folder_id=folder.id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot share a hidden folder.")
     _require_connected_client(db, current_user.id, payload.client_id)
 
     albums = db.execute(
-        select(Album).where(Album.owner_id == current_user.id, Album.folder_id == folder.id)
+        select(Album).where(Album.deleted_at.is_(None), Album.owner_id == current_user.id, Album.folder_id == folder.id)
     ).scalars().all()
 
     results: list[AlbumClientShareRead] = []
@@ -266,9 +271,11 @@ def list_shares_for_client(
         .order_by(AlbumClientShare.shared_at.desc())
     ).all()
 
+    visible_rows = [(share, album) for share, album in rows if is_visible_to_client(db, album_id=album.id)]
+
     return [
         AlbumClientShareRead.from_model(
             share, album_name=album.name, album_cover_thumbnail_url=_cover_thumbnail_for(db, album.id)
         )
-        for share, album in rows
+        for share, album in visible_rows
     ]

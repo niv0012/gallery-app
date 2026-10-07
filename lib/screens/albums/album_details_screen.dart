@@ -11,8 +11,10 @@ import '../../providers/album_provider.dart';
 import '../../providers/folder_provider.dart';
 import '../../providers/media_provider.dart';
 import '../../widgets/common/custom_app_bar.dart';
+import '../../widgets/media/face_search_actions.dart';
 import '../../widgets/common/empty_state_card.dart';
 import '../../widgets/studio/share_with_client_sheet.dart';
+import '../../providers/zip_job_provider.dart';
 
 import '../media/media_details_screen.dart' show MediaDetailsArgs;
 import '../media/media_grid_screen.dart' show MediaSearchArgs;
@@ -47,6 +49,25 @@ class _AlbumDetailsScreenState extends ConsumerState<AlbumDetailsScreen>
   ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
 
   bool _isMoving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final media = ref.read(mediaProvider);
+      
+      // Load the global gallery if it hasn't been loaded at all yet.
+      if (media.allMedia.isEmpty && !media.isLoading) {
+        media.load();
+      }
+
+      // Also ensure we specifically load the preview media for THIS album,
+      // in case its media is older than the global top 200 and would 
+      // otherwise be missing from the preview grid.
+      media.ensureAlbumLoaded(widget.albumId);
+    });
+  }
 
   @override
   void dispose() {
@@ -177,6 +198,17 @@ class _AlbumDetailsScreenState extends ConsumerState<AlbumDetailsScreen>
         title: album.name,
         showBack: true,
         actions: [
+          ...faceSearchActions(
+            context,
+            ref,
+            albumId: album.id,
+            scopeLabel: album.name,
+          ),
+          IconButton(
+            tooltip: 'Download Album as ZIP',
+            onPressed: () => _queueAlbumZip(context, ref, album),
+            icon: const Icon(Icons.archive_outlined),
+          ),
           IconButton(
             tooltip: 'Share with Client',
             onPressed: () => showShareWithClientSheet(
@@ -191,8 +223,11 @@ class _AlbumDetailsScreenState extends ConsumerState<AlbumDetailsScreen>
             tooltip: 'Share Settings',
             onPressed: () {
               Navigator.of(context).pushNamed(
-                AppRoutes.albumShareSettings,
-                arguments: album.id,
+                AppRoutes.shareLinksList,
+                arguments: {
+                  'albumId': album.id,
+                  'title': album.name,
+                },
               );
             },
             icon: Icon(Icons.share_rounded),
@@ -337,7 +372,7 @@ class _AlbumDetailsScreenState extends ConsumerState<AlbumDetailsScreen>
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Recent Photos',
+                            'Recent Media',
                             style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w800,
@@ -356,26 +391,43 @@ class _AlbumDetailsScreenState extends ConsumerState<AlbumDetailsScreen>
                                 arguments:
                                     MediaSearchArgs(initialAlbumId: album.id),
                               ),
-                              child: Text('Manage Photos',
+                              child: Text('Manage Media',
                                   style:
                                       TextStyle(fontWeight: FontWeight.w700)),
                             ),
                         ],
                       ),
                       SizedBox(height: AppSpacing.md),
-                      AlbumMediaGrid(
-                        media: previewMedia,
-                        onAddMedia: () => _openAddMediaSheet(album),
-                        onTapMedia: (m) => Navigator.of(context).pushNamed(
-                          AppRoutes.mediaDetails,
-                          arguments: MediaDetailsArgs(
-                            mediaId: m.id,
-                            mediaIds: previewMedia
-                                .map((x) => x.id)
-                                .toList(growable: false),
+                      if (previewMedia.isEmpty && mediaState.isLoading)
+                        Container(
+                          width: double.infinity,
+                          height: 160,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? AppColors.darkSurface
+                                : Colors.white.withValues(alpha: 0.72),
+                            borderRadius: BorderRadius.circular(AppRadius.xl),
+                            border: Border.all(
+                                color: Theme.of(context).brightness == Brightness.dark
+                                    ? AppColors.darkBorder
+                                    : AppColors.border),
+                          ),
+                          child: const Center(child: CircularProgressIndicator()),
+                        )
+                      else
+                        AlbumMediaGrid(
+                          media: previewMedia,
+                          onAddMedia: () => _openAddMediaSheet(album),
+                          onTapMedia: (m) => Navigator.of(context).pushNamed(
+                            AppRoutes.mediaDetails,
+                            arguments: MediaDetailsArgs(
+                              mediaId: m.id,
+                              mediaIds: previewMedia
+                                  .map((x) => x.id)
+                                  .toList(growable: false),
+                            ),
                           ),
                         ),
-                      ),
                     ],
                   ),
                 );
@@ -404,7 +456,37 @@ class _AlbumDetailsScreenState extends ConsumerState<AlbumDetailsScreen>
       ),
     );
   }
+
+  Future<void> _queueAlbumZip(
+      BuildContext context, WidgetRef ref, AlbumModel album) async {
+    try {
+      await ref.read(zipJobsProvider.notifier).createJob(
+            kind: 'zip_album',
+            targetId: album.id,
+          );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('ZIP job queued! Track progress in Downloads.'),
+          action: SnackBarAction(
+            label: 'View',
+            onPressed: () =>
+                Navigator.of(context).pushNamed(AppRoutes.zipJobs),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not queue ZIP: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
 }
+
 
 /// Distinguishes "user picked No folder" from "sheet dismissed with no
 /// selection" since both would otherwise read as a null result.

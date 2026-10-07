@@ -139,6 +139,19 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
         ? 0
         : widget.initialIndex.clamp(0, _mediaIds.length - 1);
     _pageController = PageController(initialPage: _index);
+
+    // Photos opened from face-search results (or any pre-fetched list)
+    // aren't in the main paged media list, so favorite / rename / move /
+    // copy / edit / delete had nothing to act on. Register them with the
+    // provider so every action works for them too. Skipped for
+    // read-only contexts (shared galleries) that don't own the media.
+    final prefetched = widget.mediaItems;
+    if (prefetched != null && !widget.readOnly) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(mediaProvider).adoptMedia(prefetched);
+      });
+    }
   }
 
   @override
@@ -318,9 +331,19 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
     // Maintain original ordering given by viewer args.
     final items = <MediaModel>[];
     if (widget.mediaItems != null) {
-      // Pre-fetched media (e.g. client Shared Gallery) — never touches
-      // mediaProvider, so it works for media the current user doesn't own.
+      // Pre-fetched media (client Shared Gallery, face-search results).
+      // For owner views prefer the provider's copy so favorite / rename /
+      // move / edit changes show up immediately; fall back to the
+      // pre-fetched snapshot until it has been adopted.
+      final live = widget.readOnly ? null : ref.watch(mediaProvider);
+      final gone = live?.deletedIds ?? const <String>{};
       for (final id in _mediaIds) {
+        if (gone.contains(id)) continue;
+        final fresh = live?.byId(id);
+        if (fresh != null) {
+          items.add(fresh);
+          continue;
+        }
         for (final m in widget.mediaItems!) {
           if (m.id == id) {
             items.add(m);
@@ -592,8 +615,31 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
 
       if (newName == null) return;
 
-      await controller.renameMediaById(
-          mediaId: current.id, newFileName: newName);
+      final before = controller.byId(current.id)?.fileName ?? current.fileName;
+      try {
+        final updated = await controller.renameMediaById(
+            mediaId: current.id, newFileName: newName, fallbackMedia: current);
+        if (updated != null && context.mounted) {
+          setState(() {
+            items[_index] = updated;
+          });
+        }
+        
+        final after = controller.byId(current.id)?.fileName;
+        if (context.mounted && after == before && newName.trim() != before && updated == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text(
+                    "Couldn't rename — the name is empty, invalid, or already used in this album.")),
+          );
+        }
+      } catch (_) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Couldn't rename this file. Try again.")),
+          );
+        }
+      }
 
       // Restore selection.
       controller.deselectAll();
@@ -696,9 +742,16 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
                             iconColor: current.isFavorite
                                 ? AppColors.accent
                                 : Colors.white,
-                            onTap: () => ref
-                                .read(mediaProvider)
-                                .toggleFavorite(current.id),
+                            onTap: () {
+                              ref
+                                  .read(mediaProvider)
+                                  .toggleFavorite(current.id, fallbackMedia: current);
+                              if (widget.mediaItems != null && context.mounted) {
+                                setState(() {
+                                  items[_index] = current.copyWith(isFavorite: !current.isFavorite);
+                                });
+                              }
+                            },
                           ),
                         ],
                       ),

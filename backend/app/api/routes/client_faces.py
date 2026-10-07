@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_client_user
 from app.core.album_sharing import active_shares_for_client
 from app.core.face_index import extract_query_faces, resolve_query_face, search_client_faces
+from app.core.visibility import is_visible_to_client
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.face import DetectedFaceRead, FaceBoxRead, FaceMatchRead, FaceSearchResponse
@@ -34,7 +35,10 @@ async def search_by_face(
     call's `detected_faces` on a follow-up call to search using a
     specific one instead of the largest.
     """
-    shared_album_ids = set(active_shares_for_client(db, client_id=current_user.id))
+    shared_album_ids = {
+        a_id for a_id in active_shares_for_client(db, client_id=current_user.id)
+        if is_visible_to_client(db, album_id=a_id)
+    }
 
     faces = await extract_query_faces(file)
     chosen_index, chosen_face = resolve_query_face(faces, face_index)

@@ -12,6 +12,7 @@ import '../../models/share_link_model.dart';
 import '../../providers/album_provider.dart';
 import '../../providers/share_link_provider.dart';
 import '../../providers/studio_client_connections_provider.dart';
+import '../../providers/face_search_provider.dart';
 import '../../widgets/buttons/gradient_button.dart';
 import '../../widgets/common/custom_app_bar.dart';
 import '../../providers/auth_providers.dart';
@@ -23,8 +24,15 @@ enum ShareMode { public, client, private }
 
 class ShareSettingsScreen extends ConsumerStatefulWidget {
   final String albumId;
+  final String? albumName;
+  final GalleryShareLink? link;
 
-  const ShareSettingsScreen({super.key, required this.albumId});
+  const ShareSettingsScreen({
+    super.key, 
+    required this.albumId,
+    this.albumName,
+    this.link,
+  });
 
   @override
   ConsumerState<ShareSettingsScreen> createState() =>
@@ -42,6 +50,7 @@ class _ShareSettingsScreenState extends ConsumerState<ShareSettingsScreen> {
   DateTime? _expiryDate;
   bool _allowDownload = true;
   bool _showWatermark = false;
+  bool _requireFaceSearch = false;
   bool _isSaving = false;
 
   @override
@@ -76,7 +85,19 @@ class _ShareSettingsScreenState extends ConsumerState<ShareSettingsScreen> {
       _expiryDate = link.expiresAt;
       _allowDownload = link.allowDownload;
       _showWatermark = link.showWatermark;
+      _requireFaceSearch = link.kind == 'face_search';
     }
+    _checkIndexStatus();
+  }
+
+  Map<String, dynamic>? _indexStatus;
+
+  Future<void> _checkIndexStatus() async {
+    try {
+      final repo = ref.read(faceRepositoryProvider);
+      final status = await repo.getFaceIndexStatus(albumId: widget.albumId);
+      if (mounted) setState(() => _indexStatus = status);
+    } catch (_) {}
   }
 
   Future<void> _selectExpiryDate(BuildContext context) async {
@@ -155,20 +176,37 @@ class _ShareSettingsScreenState extends ConsumerState<ShareSettingsScreen> {
 
       final controller =
           ref.read(shareLinkControllerProvider(ShareTarget(albumId: widget.albumId)).notifier);
-      await controller.createOrUpdate(
-        clientId: _shareMode == ShareMode.client ? _selectedClientId : null,
-        clearClient: _shareMode != ShareMode.client,
-        password: _shareMode == ShareMode.private
-            ? (_passwordController.text.isEmpty
-                ? null
-                : _passwordController.text)
-            : null,
-        clearPassword: _shareMode != ShareMode.private,
-        expiresAt: _hasExpiry ? _expiryDate : null,
-        clearExpiry: !_hasExpiry,
-        allowDownload: _allowDownload,
-        showWatermark: _showWatermark,
-      );
+      if (existingLink == null) {
+        await controller.createLink(
+          clientId: _shareMode == ShareMode.client ? _selectedClientId : null,
+          password: _shareMode == ShareMode.private
+              ? (_passwordController.text.isEmpty
+                  ? null
+                  : _passwordController.text)
+              : null,
+          expiresAt: _hasExpiry ? _expiryDate : null,
+          allowDownload: _allowDownload,
+          showWatermark: _showWatermark,
+          kind: _requireFaceSearch ? 'face_search' : 'standard',
+        );
+      } else {
+        await controller.updateLink(
+          id: existingLink.id,
+          clientId: _shareMode == ShareMode.client ? _selectedClientId : null,
+          clearClient: _shareMode != ShareMode.client,
+          password: _shareMode == ShareMode.private
+              ? (_passwordController.text.isEmpty
+                  ? null
+                  : _passwordController.text)
+              : null,
+          clearPassword: _shareMode != ShareMode.private,
+          expiresAt: _hasExpiry ? _expiryDate : null,
+          clearExpiry: !_hasExpiry,
+          allowDownload: _allowDownload,
+          showWatermark: _showWatermark,
+          kind: _requireFaceSearch ? 'face_search' : 'standard',
+        );
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -184,7 +222,7 @@ class _ShareSettingsScreenState extends ConsumerState<ShareSettingsScreen> {
     }
   }
 
-  Future<void> _revokeLink() async {
+  Future<void> _revokeLink(GalleryShareLink existingLink) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -211,11 +249,12 @@ class _ShareSettingsScreenState extends ConsumerState<ShareSettingsScreen> {
     try {
       await ref
           .read(shareLinkControllerProvider(ShareTarget(albumId: widget.albumId)).notifier)
-          .revoke();
+          .revoke(existingLink.id);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Share link revoked.')),
       );
+      Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -227,17 +266,29 @@ class _ShareSettingsScreenState extends ConsumerState<ShareSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final albums = ref.watch(albumProvider).allAlbums;
-    final album = albums.firstWhere((a) => a.id == widget.albumId);
+    final album = albums.where((a) => a.id == widget.albumId).firstOrNull;
+    final name = album?.name ?? widget.albumName ?? 'Album';
 
     final linkState = ref.watch(shareLinkControllerProvider(ShareTarget(albumId: widget.albumId)));
-    final activeLink = linkState.activeLink;
+    
+    GalleryShareLink? activeLink = widget.link;
+    if (activeLink != null) {
+      final updated = linkState.activeLinks.where((l) => l.id == activeLink!.id).firstOrNull;
+      if (updated != null) {
+        activeLink = updated;
+      }
+    } else if (linkState.activeLinks.isNotEmpty) {
+      // If we didn't pass a specific link, but we have active links (e.g. just created one), show the first valid one.
+      activeLink = linkState.activeLinks.where((l) => !l.isRevoked).lastOrNull;
+    }
+    
     final hasActiveLink = activeLink != null && !activeLink.isRevoked;
 
     _initFields(activeLink);
 
     return Scaffold(
       appBar: CustomAppBar(
-        title: 'Share "${album.name}"',
+        title: 'Share "$name"',
         showBack: true,
       ),
       body: SafeArea(
@@ -301,7 +352,7 @@ class _ShareSettingsScreenState extends ConsumerState<ShareSettingsScreen> {
                                     Expanded(
                                       child: CustomTextField(
                                         label: hasActiveLink &&
-                                                activeLink.hasPassword
+                                                activeLink!.hasPassword
                                             ? 'New Passcode (leave blank to keep current)'
                                             : 'Passcode',
                                         icon: Icons.lock_outline_rounded,
@@ -309,7 +360,7 @@ class _ShareSettingsScreenState extends ConsumerState<ShareSettingsScreen> {
                                         obscureText: false,
                                         validator: (v) {
                                           if (hasActiveLink &&
-                                              activeLink.hasPassword &&
+                                              activeLink!.hasPassword &&
                                               (v == null || v.isEmpty)) {
                                             return null;
                                           }
@@ -356,12 +407,12 @@ class _ShareSettingsScreenState extends ConsumerState<ShareSettingsScreen> {
                                 _buildSectionHeader(
                                     context, 'Active Share Link'),
                                 SizedBox(height: AppSpacing.sm),
-                                _buildActiveLinkCard(activeLink),
+                                _buildActiveLinkCard(activeLink!),
                                 SizedBox(height: AppSpacing.xl),
                                 _buildSectionHeader(
                                     context, 'Link Analytics & QR'),
                                 SizedBox(height: AppSpacing.sm),
-                                _buildAnalyticsAndQrCard(activeLink),
+                                _buildAnalyticsAndQrCard(activeLink!),
                               ],
                             ],
                           ),
@@ -633,10 +684,121 @@ class _ShareSettingsScreenState extends ConsumerState<ShareSettingsScreen> {
             activeThumbColor: AppColors.primary,
             onChanged: (val) => setState(() => _showWatermark = val),
           ),
+          const Divider(height: 1, indent: 16, endIndent: 16),
+          SwitchListTile(
+            value: _requireFaceSearch,
+            title: Text(
+              'Require Face Search',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13.5,
+                  color: (Theme.of(context).brightness == Brightness.dark
+                      ? AppColors.textOnDark
+                      : AppColors.text)),
+            ),
+            subtitle: Text(
+              'Guests must upload a selfie to view only their photos.',
+              style: TextStyle(
+                  fontSize: 11.5,
+                  color: (Theme.of(context).brightness == Brightness.dark
+                      ? AppColors.subtitleOnDark
+                      : AppColors.subtitle)),
+            ),
+            activeThumbColor: AppColors.primary,
+            onChanged: (val) => setState(() => _requireFaceSearch = val),
+          ),
+          if (_requireFaceSearch) _buildFaceIndexWarning(context),
         ],
       ),
     );
   }
+
+  Widget _buildFaceIndexWarning(BuildContext context) {
+    final status = _indexStatus;
+    if (status == null) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: LinearProgressIndicator(),
+      );
+    }
+    final total = (status['total_photos'] as num?)?.toInt() ?? 0;
+    final indexed = (status['indexed_photos'] as num?)?.toInt() ?? 0;
+    if (total == 0 || indexed >= total) return const SizedBox.shrink();
+
+    final unindexed = total - indexed;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.orange.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Face index incomplete',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: Colors.orange.shade800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$unindexed of $total photos have not been indexed yet. '
+                    'Guests may miss their photos until indexing is complete.',
+                    style: TextStyle(fontSize: 11.5, color: Colors.orange.shade700),
+                  ),
+                  const SizedBox(height: 6),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.orange.shade800,
+                      side: BorderSide(color: Colors.orange.shade400),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    onPressed: () async {
+                      try {
+                        // trigger reindex via API — fire and forget
+                        await ref.read(apiClientProvider).post(
+                          '/faces/reindex?album_id=${widget.albumId}',
+                          body: {},
+                          withAuth: true,
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Face indexing started in background.')),
+                        );
+                        await Future.delayed(const Duration(seconds: 3));
+                        await _checkIndexStatus();
+                      } catch (e) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Failed to start indexing: $e')),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.autorenew_rounded, size: 14),
+                    label: const Text('Start indexing', style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
 
   Widget _buildActiveLinkCard(GalleryShareLink link) {
     final primaryUrl = link.primaryShareUrl;
@@ -716,7 +878,7 @@ class _ShareSettingsScreenState extends ConsumerState<ShareSettingsScreen> {
                     foregroundColor: AppColors.error,
                     side: const BorderSide(color: AppColors.error),
                   ),
-                  onPressed: _revokeLink,
+                  onPressed: () => _revokeLink(link),
                   icon: Icon(Icons.link_off_rounded),
                   label: Text('Revoke Link'),
                 ),
@@ -735,13 +897,23 @@ class _ShareSettingsScreenState extends ConsumerState<ShareSettingsScreen> {
     final statusText =
         link.isExpired ? 'Expired' : (link.isRevoked ? 'Revoked' : 'Active');
 
-    return Container(
-      padding: EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: context.surfaceColor,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context).pushNamed(AppRoutes.linkAnalytics, arguments: {
+            'linkId': link.id,
+            'link': link,
+          });
+        },
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: context.borderColor),
-      ),
+        child: Container(
+          padding: EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: context.surfaceColor,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: context.borderColor),
+          ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -803,6 +975,8 @@ class _ShareSettingsScreenState extends ConsumerState<ShareSettingsScreen> {
             ],
           ),
         ],
+      ),
+        ),
       ),
     );
   }

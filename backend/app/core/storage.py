@@ -34,7 +34,20 @@ logger = logging.getLogger("app.storage")
 
 # Extensions/content-types accepted from the upload form. Kept narrow on
 # purpose — this is what actually gets written to storage and served back.
-_PHOTO_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"}
+_PHOTO_CONTENT_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+    "image/x-adobe-dng",
+    "image/x-nikon-nef",
+    "image/x-canon-cr2",
+    "image/x-canon-cr3",
+    "image/x-olympus-orf",
+    "image/x-sony-arw",
+    "image/raw",
+}
 _VIDEO_CONTENT_TYPES = {
     "video/mp4",
     "video/quicktime",
@@ -49,7 +62,7 @@ _VIDEO_CONTENT_TYPES = {
     "video/mp2t",
 }
 
-THUMBNAIL_MAX_DIMENSION = 480
+THUMBNAIL_MAX_DIMENSION = 1080
 # Grab the poster frame this far into the clip (skips a possible black
 # first frame). Falls back to frame 0 if the video is shorter than this.
 VIDEO_THUMBNAIL_TIMESTAMP_SECONDS = 1.0
@@ -334,6 +347,34 @@ def build_media_url(relative_path: str | None) -> str | None:
     if _use_r2():
         return f"{settings.R2_PUBLIC_URL}/{relative_path}"
     return f"{settings.app_public_url}{settings.MEDIA_URL_PREFIX}/{relative_path}"
+
+
+def get_signed_original_url(relative_path: str | None, expires_in_seconds: int = 3600) -> str | None:
+    """Returns a time-limited presigned URL for downloading the original file directly
+    from R2. If using local storage, returns the normal media URL (as it is already
+    served publicly via StaticFiles).
+    """
+    if not relative_path:
+        return None
+    if _use_r2():
+        client = _r2_client()
+        return client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": settings.R2_BUCKET_NAME, "Key": relative_path},
+            ExpiresIn=expires_in_seconds,
+        )
+    # Local fallback
+    base_url = build_media_url(relative_path)
+    if not base_url:
+        return None
+        
+    import time
+    import hmac
+    import hashlib
+    expires = int(time.time()) + expires_in_seconds
+    message = f"{relative_path}:{expires}".encode()
+    sig = hmac.new(settings.SECRET_KEY.encode(), message, hashlib.sha256).hexdigest()
+    return f"{base_url}?expires={expires}&sig={sig}"
 
 
 def build_share_url(token: str) -> str:

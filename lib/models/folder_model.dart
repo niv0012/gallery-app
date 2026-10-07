@@ -31,6 +31,19 @@ class FolderModel {
   /// "recent" sorting.
   final DateTime createdAt;
 
+  /// Soft deletion timestamp. Null if active.
+  final DateTime? deletedAt;
+
+  final int photoCount;
+  final int videoCount;
+  final List<String> previewThumbnails;
+
+  /// Inheritable folder rules (Phase 3)
+  final bool? allowDownload;
+  final bool? showWatermark;
+  
+  final bool hasShareLink;
+
   FolderModel({
     required this.id,
     required this.name,
@@ -40,6 +53,13 @@ class FolderModel {
     this.isHidden = false,
     this.isFavorite = false,
     DateTime? createdAt,
+    this.deletedAt,
+    this.photoCount = 0,
+    this.videoCount = 0,
+    this.previewThumbnails = const [],
+    this.allowDownload,
+    this.showWatermark,
+    this.hasShareLink = false,
   }) : createdAt = createdAt ?? DateTime.now();
 
   /// Builds a [FolderModel] from a `GET/POST/PATCH /folders` response
@@ -55,6 +75,13 @@ class FolderModel {
       isHidden: json['is_hidden'] as bool? ?? false,
       isFavorite: json['is_favorite'] as bool? ?? false,
       createdAt: DateTime.parse(json['created_at'] as String),
+      deletedAt: json['deleted_at'] != null ? DateTime.parse(json['deleted_at'] as String) : null,
+      photoCount: json['photo_count'] as int? ?? 0,
+      videoCount: json['video_count'] as int? ?? 0,
+      previewThumbnails: (json['preview_thumbnails'] as List<dynamic>?)?.cast<String>() ?? const [],
+      allowDownload: json['allow_download'] as bool?,
+      showWatermark: json['show_watermark'] as bool?,
+      hasShareLink: json['has_share_link'] as bool? ?? false,
     );
   }
 
@@ -74,6 +101,8 @@ class FolderModel {
         'is_hidden': isHidden,
         'is_favorite': isFavorite,
         'gradient_argb': gradientArgb,
+        if (allowDownload != null) 'allow_download': allowDownload,
+        if (showWatermark != null) 'show_watermark': showWatermark,
       };
 
   List<FolderGradientColor> gradientColors() {
@@ -92,6 +121,12 @@ class FolderModel {
       isHidden: json['isHidden'] as bool? ?? false,
       isFavorite: json['isFavorite'] as bool? ?? false,
       createdAt: DateTime.parse(json['createdAt'] as String),
+      deletedAt: json['deletedAt'] != null ? DateTime.parse(json['deletedAt'] as String) : null,
+      photoCount: json['photoCount'] as int? ?? 0,
+      videoCount: json['videoCount'] as int? ?? 0,
+      previewThumbnails: (json['previewThumbnails'] as List<dynamic>?)?.cast<String>() ?? const [],
+      allowDownload: json['allowDownload'] as bool?,
+      showWatermark: json['showWatermark'] as bool?,
     );
   }
 
@@ -105,6 +140,12 @@ class FolderModel {
         'isHidden': isHidden,
         'isFavorite': isFavorite,
         'createdAt': createdAt.toIso8601String(),
+        'deletedAt': deletedAt?.toIso8601String(),
+        'photoCount': photoCount,
+        'videoCount': videoCount,
+        'previewThumbnails': previewThumbnails,
+        'allowDownload': allowDownload,
+        'showWatermark': showWatermark,
       };
 
   FolderModel copyWith({
@@ -117,6 +158,12 @@ class FolderModel {
     bool? isHidden,
     bool? isFavorite,
     DateTime? createdAt,
+    DateTime? deletedAt,
+    int? photoCount,
+    int? videoCount,
+    List<String>? previewThumbnails,
+    bool? allowDownload,
+    bool? showWatermark,
   }) {
     return FolderModel(
       id: id ?? this.id,
@@ -127,6 +174,13 @@ class FolderModel {
       isHidden: isHidden ?? this.isHidden,
       isFavorite: isFavorite ?? this.isFavorite,
       createdAt: createdAt ?? this.createdAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      photoCount: photoCount ?? this.photoCount,
+      videoCount: videoCount ?? this.videoCount,
+      previewThumbnails: previewThumbnails ?? this.previewThumbnails,
+      allowDownload: allowDownload ?? this.allowDownload,
+      showWatermark: showWatermark ?? this.showWatermark,
+      hasShareLink: hasShareLink ?? this.hasShareLink,
     );
   }
 }

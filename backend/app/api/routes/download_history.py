@@ -41,7 +41,7 @@ def log_download(
     automatically by `POST /public/share-links/{token}/download`.)
     """
     media = db.get(Media, payload.media_id)
-    if media is None or media.owner_id != current_user.id:
+    if media is None or media.owner_id != current_user.id or getattr(media, "deleted_at", None) is not None:
         raise HTTPException(status_code=404, detail="Media not found")
 
     event = record_download_event(
