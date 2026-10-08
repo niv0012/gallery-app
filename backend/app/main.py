@@ -1,6 +1,9 @@
 import asyncio
 import contextlib
 import mimetypes
+mimetypes.add_type("video/mp4", ".mov")
+mimetypes.add_type("video/mp4", ".MOV")
+
 import re
 from pathlib import Path
 from typing import Iterator
