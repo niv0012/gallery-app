@@ -1161,7 +1161,11 @@ class _VideoPlayerItemState extends State<_VideoPlayerItem> {
       return Center(child: CircularProgressIndicator(color: Colors.white));
     }
     if (_initFailed || _controller == null) {
-      return _NoVideoPlaceholder(media: widget.media, error: _initError);
+      return _NoVideoPlaceholder(
+        media: widget.media,
+        error: _initError,
+        onRetry: _initializing ? null : _init,
+      );
     }
 
     return Center(
@@ -1187,8 +1191,20 @@ class _VideoPlayerItemState extends State<_VideoPlayerItem> {
 class _NoVideoPlaceholder extends StatelessWidget {
   final MediaModel media;
   final String? error;
+  final VoidCallback? onRetry;
 
-  const _NoVideoPlaceholder({required this.media, this.error});
+  const _NoVideoPlaceholder({required this.media, this.error, this.onRetry});
+
+  /// iOS reports "Cannot Open / media format is not supported" while the
+  /// server is still converting a fresh upload to MP4, so show a friendly
+  /// message with a Retry button instead of the raw platform exception.
+  bool get _looksLikeFormatError {
+    final e = (error ?? '').toLowerCase();
+    return e.contains('not supported') ||
+        e.contains('cannot open') ||
+        e.contains('-11828') ||
+        e.contains('-12847');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1226,13 +1242,31 @@ class _NoVideoPlaceholder extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 8, left: 12, right: 12),
               child: Text(
-                error!,
+                _looksLikeFormatError
+                    ? 'The video may still be getting ready. Please try again in a moment.'
+                    : error!,
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.72),
                   fontSize: 9,
+                ),
+              ),
+            ),
+          if (error != null && onRetry != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: TextButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded,
+                    color: Colors.white, size: 16),
+                label: const Text(
+                  'Retry',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12),
                 ),
               ),
             ),

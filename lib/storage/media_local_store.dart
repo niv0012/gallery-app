@@ -142,6 +142,15 @@ class MediaLocalStore {
       'isDeleted': m.isDeleted,
       'gradientArgb': m.gradientArgb,
       'editRecipe': m.editRecipe?.toJson(),
+      // Server URLs must survive the offline cache. Without them a cached
+      // API video has no filePath AND no remoteUrl, so the player shows
+      // "Video file not available on this device".
+      'remoteUrl': m.remoteUrl,
+      'remoteThumbnailUrl': m.remoteThumbnailUrl,
+      'likeCount': m.likeCount,
+      'isLikedByMe': m.isLikedByMe,
+      'commentCount': m.commentCount,
+      'canRevert': m.canRevert,
     };
   }
 
@@ -187,6 +196,12 @@ class MediaLocalStore {
       editRecipe: json['editRecipe'] != null
           ? EditRecipe.fromJson(json['editRecipe'] as Map<String, dynamic>)
           : null,
+      remoteUrl: json['remoteUrl'] as String?,
+      remoteThumbnailUrl: json['remoteThumbnailUrl'] as String?,
+      likeCount: json['likeCount'] as int? ?? 0,
+      isLikedByMe: json['isLikedByMe'] as bool? ?? false,
+      commentCount: json['commentCount'] as int? ?? 0,
+      canRevert: json['canRevert'] as bool? ?? false,
     );
   }
 }

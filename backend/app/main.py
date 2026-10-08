@@ -38,7 +38,20 @@ async def lifespan(app: FastAPI):
             pass
 
 
+from fastapi.responses import RedirectResponse
+from app.core.transcode import CONVERTIBLE_EXTENSIONS
+
 app = FastAPI(title=settings.PROJECT_NAME, lifespan=lifespan)
+
+@app.middleware("http")
+async def transcoded_media_fallback_middleware(request: Request, call_next):
+    response = await call_next(request)
+    if response.status_code == 404 and request.url.path.startswith(settings.MEDIA_URL_PREFIX):
+        path = request.url.path.lower()
+        if path.endswith(CONVERTIBLE_EXTENSIONS):
+            mp4_url = request.url.path.rsplit('.', 1)[0] + ".mp4"
+            return RedirectResponse(url=mp4_url, status_code=302)
+    return response
 
 app.add_middleware(
     CORSMiddleware,

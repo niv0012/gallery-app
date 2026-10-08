@@ -32,37 +32,32 @@ router = APIRouter(prefix="/media/chunked", tags=["chunked-upload"])
 logger = logging.getLogger(__name__)
 
 
+from app.core.transcode_worker import process_video_upload_background
+
 def _generate_chunked_upload_thumbnail(
     *, media_id: uuid.UUID, owner_id: uuid.UUID, relative_path: str, media_type: MediaType
 ) -> None:
     """Generate thumbnail and video duration after a chunked upload commits."""
-    thumbnail_path = (
-        make_video_thumbnail(
+    if media_type == MediaType.video:
+        process_video_upload_background(
+            media_id=media_id,
+            owner_id=owner_id,
+            relative_path=relative_path,
+            media_type=media_type,
+        )
+    else:
+        thumbnail_path = make_thumbnail(
             owner_id=owner_id,
             media_id=media_id,
             original_relative_path=relative_path,
         )
-        if media_type == MediaType.video
-        else make_thumbnail(
-            owner_id=owner_id,
-            media_id=media_id,
-            original_relative_path=relative_path,
-        )
-    )
-    duration_ms = (
-        get_video_duration_ms(relative_path)
-        if media_type == MediaType.video
-        else None
-    )
-
-    with SessionLocal() as db:
-        media = db.get(Media, media_id)
-        if media is None:
-            logger.error("Chunked upload media %s disappeared before processing", media_id)
-            return
-        media.thumbnail_path = thumbnail_path
-        media.duration_ms = duration_ms
-        db.commit()
+        with SessionLocal() as db:
+            media = db.get(Media, media_id)
+            if media is None:
+                logger.error("Chunked upload media %s disappeared before processing", media_id)
+                return
+            media.thumbnail_path = thumbnail_path
+            db.commit()
 
 
 def _cleanup_chunk_directory(chunk_dir: Path) -> None:
