@@ -130,7 +130,7 @@ def start_chunked_upload(
     If Local storage is configured, it returns an upload_id for local chunks.
     """
     try:
-        media_type = media_type_for_content_type(req.content_type)
+        media_type = media_type_for_content_type(req.content_type, filename=req.filename)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -248,7 +248,7 @@ def complete_chunked_upload(
             raise HTTPException(status_code=404, detail="Folder not found")
 
     try:
-        media_type = media_type_for_content_type(req.content_type)
+        media_type = media_type_for_content_type(req.content_type, filename=req.filename)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

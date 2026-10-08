@@ -68,11 +68,29 @@ THUMBNAIL_MAX_DIMENSION = 1080
 VIDEO_THUMBNAIL_TIMESTAMP_SECONDS = 1.0
 
 
-def media_type_for_content_type(content_type: str) -> MediaType:
+import mimetypes
+
+def media_type_for_content_type(content_type: str, filename: str | None = None) -> MediaType:
+    content_type = content_type or ""
+    
+    # If the app sends application/octet-stream or empty, try guessing from extension
+    if not content_type or content_type == "application/octet-stream":
+        if filename:
+            guessed, _ = mimetypes.guess_type(filename)
+            if guessed:
+                content_type = guessed
+
     if content_type in _VIDEO_CONTENT_TYPES:
         return MediaType.video
     if content_type in _PHOTO_CONTENT_TYPES:
         return MediaType.photo
+        
+    # Last-ditch prefix check in case flutter sends something like "video/mov"
+    if content_type.startswith("video/"):
+        return MediaType.video
+    if content_type.startswith("image/"):
+        return MediaType.photo
+
     raise ValueError(f"Unsupported content type: {content_type}")
 
 

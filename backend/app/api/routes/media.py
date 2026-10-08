@@ -187,7 +187,7 @@ def upload_media(
 
     content_type = file.content_type or ""
     try:
-        media_type = media_type_for_content_type(content_type)
+        media_type = media_type_for_content_type(content_type, filename=file.filename)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -772,7 +772,7 @@ def replace_media_file(
 
     content_type = file.content_type or media.content_type
     try:
-        media_type_for_content_type(content_type)
+        media_type_for_content_type(content_type, filename=file.filename)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
