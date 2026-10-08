@@ -191,6 +191,23 @@ class PlatformUser {
         ? (DateTime.tryParse(joinedAtStr) ?? DateTime.now())
         : DateTime.now();
 
+    final planExpiryStr = json['plan_expiry'] as String?;
+    final planExpiryDate = planExpiryStr != null ? DateTime.tryParse(planExpiryStr) : null;
+    
+    String subStatus = (json['subscription_status'] as String?) ?? (json['plan_status'] as String?) ?? 'none';
+    
+    if (subStatus == 'inactive') {
+      subStatus = 'none';
+    }
+    
+    if (planExpiryDate != null && DateTime.now().toUtc().isAfter(planExpiryDate)) {
+      subStatus = 'expired';
+    }
+
+    if (subStatus == 'active' && json['current_plan'] == 'trial') {
+      subStatus = 'trial';
+    }
+
     return PlatformUser(
       id: json['id'].toString(),
       fullName: (json['full_name'] as String?) ?? (json['name'] as String?) ?? (json['email'] as String?) ?? 'User',
@@ -200,14 +217,12 @@ class PlatformUser {
       joinedAt: joinedAtDate,
       city: json['city'] as String?,
       studioName: json['studio_name'] as String?,
-      subscriptionStatus: (json['subscription_status'] as String?) ?? (json['plan_status'] as String?) ?? 'none',
+      subscriptionStatus: subStatus,
       currentPlan: json['current_plan'] as String?,
       planStartedAt: json['plan_started_at'] != null
           ? DateTime.tryParse(json['plan_started_at'] as String)
           : null,
-      planExpiry: json['plan_expiry'] != null
-          ? DateTime.tryParse(json['plan_expiry'] as String)
-          : null,
+      planExpiry: planExpiryDate,
       isActive: (json['is_active'] as bool?) ?? true,
       linkedAccountId: json['linked_account_id'] as String?,
       usedBytes: (json['used_bytes'] as num?)?.toInt(),

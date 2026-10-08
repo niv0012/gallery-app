@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, field_validator, model_validator
 
@@ -313,6 +313,12 @@ class UserRead(BaseModel):
         so the Flutter app can correctly identify and style trial plans.
         """
         if self.plan_status == "active":
+            expiry = self.plan_expiry
+            if expiry is not None:
+                if expiry.tzinfo is None:
+                    expiry = expiry.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) > expiry:
+                    return "expired"
             if self.current_plan == "trial":
                 return "trial"
             return "active"

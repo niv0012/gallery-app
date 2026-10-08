@@ -149,8 +149,14 @@ def activate_plan(
     current_user.last_reminder_days = None
 
     # If adding time to an active plan, append to expiry instead of replacing
-    if current_user.plan_expiry and current_user.plan_expiry > now:
-        current_user.plan_expiry += duration
+    if current_user.plan_expiry:
+        expiry = current_user.plan_expiry
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
+        if expiry > now:
+            current_user.plan_expiry = expiry + duration
+        else:
+            current_user.plan_expiry = now + duration
     else:
         current_user.plan_expiry = now + duration
 

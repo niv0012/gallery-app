@@ -184,7 +184,7 @@ def _folder_counts(db: Session, owner_id: uuid.UUID, folder_ids: list[uuid.UUID]
         SELECT ft.ancestor_id, m.id, m.media_type, COALESCE(m.thumbnail_path, m.file_path) as path, m.created_at
         FROM folder_tree ft
         JOIN media m ON m.folder_id = ft.descendant_id
-        WHERE m.is_deleted = false
+        WHERE m.is_deleted = false AND m.album_id IS NULL
         UNION
         SELECT ft.ancestor_id, m.id, m.media_type, COALESCE(m.thumbnail_path, m.file_path) as path, m.created_at
         FROM folder_tree ft
@@ -215,7 +215,7 @@ def _folder_counts(db: Session, owner_id: uuid.UUID, folder_ids: list[uuid.UUID]
         SELECT ft.ancestor_id, m.id, m.media_type, m.thumbnail_path as path, m.created_at
         FROM folder_tree ft
         JOIN media m ON m.folder_id = ft.descendant_id
-        WHERE m.is_deleted = false AND m.thumbnail_path IS NOT NULL
+        WHERE m.is_deleted = false AND m.album_id IS NULL AND m.thumbnail_path IS NOT NULL
         UNION
         SELECT ft.ancestor_id, m.id, m.media_type, m.thumbnail_path as path, m.created_at
         FROM folder_tree ft
@@ -807,7 +807,7 @@ def download_folder_zip(
             Media.is_deleted.is_(False),
             Media.owner_id == current_user.id,
             sa.or_(
-                Media.folder_id.in_(all_folder_ids_list),
+                sa.and_(Media.folder_id.in_(all_folder_ids_list), Media.album_id.is_(None)),
                 Media.album_id.in_(album_ids_list)
             )
         )

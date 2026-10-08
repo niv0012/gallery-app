@@ -11,6 +11,7 @@ import '../core/routes/app_routes.dart';
 import '../core/theme/app_theme.dart';
 import '../providers/album_provider.dart';
 import '../providers/folder_provider.dart';
+import '../providers/drawer_provider.dart';
 import '../services/media_picker_service.dart' show MediaContentType;
 import 'new_upload_provider.dart';
 import 'upload_queue_provider.dart';
@@ -260,7 +261,13 @@ class _NewUploadScreenState extends ConsumerState<NewUploadScreen> {
           ref.read(uploadQueueProvider).valueOrNull?.jobs ?? [];
 
       for (final asset in assets) {
-        final file = await asset.file;
+        File? file;
+        if (Platform.isIOS || Platform.isMacOS) {
+          // Get the original file without triggering iOS compression/transcoding
+          file = await asset.originFile;
+        }
+        // Fallback to .file for Android or if originFile fails
+        file ??= await asset.file;
         if (file == null) continue;
 
         final sizeBytes = await file.length();
@@ -479,6 +486,27 @@ class _NewUploadScreenState extends ConsumerState<NewUploadScreen> {
   // -------------------------------------------------------------------------
 
   Future<void> _startUpload() async {
+    final subState = ref.read(subscriptionStateProvider).valueOrNull;
+    final isFree = subState?.plan == SubscriptionPlan.free;
+    
+    if (isFree) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Plan Expired'),
+          content: const Text('Your subscription plan has expired. Please upgrade to continue uploading media.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final s = ref.read(newUploadProvider);
     if (s.tempPickedFiles.isEmpty) return;
 

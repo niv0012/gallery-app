@@ -57,9 +57,15 @@ async def _global_exception_handler(_req: _Request, exc: Exception) -> _JSONResp
         "Unhandled exception on %s %s: %s\n%s",
         _req.method, _req.url.path, exc, traceback.format_exc()
     )
+    origin = _req.headers.get("origin")
+    headers = {}
+    if origin:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
     return _JSONResponse(
         status_code=500,
         content={"detail": "An internal server error occurred. Please try again."},
+        headers=headers,
     )
 
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
@@ -227,10 +233,17 @@ def shared_web_fallback(share_id: str, db: Session = Depends(get_db)):
     
     # Defaults
     studio_name = "PicGallery"
+    studio_address = ""
+    website = ""
+    instagram_url = ""
+    facebook_url = ""
+    youtube_url = ""
     og_title = "PicGallery — Client Gallery"
     og_desc = "Shared via PicGallery • View, download & select your favourites"
     # Default OG image — shown when the studio hasn't uploaded a cover photo yet
     og_image = "https://api.picgallery.in/static/og-default.png"
+    avatar_url = "https://api.picgallery.in/static/og-default.png"
+    cover_image_url = ""
 
     try:
         link = db.query(ShareLink).filter(ShareLink.token == share_id).first()
@@ -238,12 +251,20 @@ def shared_web_fallback(share_id: str, db: Session = Depends(get_db)):
             owner = db.query(User).filter(User.id == link.owner_id).first()
             if owner:
                 studio_name = owner.studio_name or owner.full_name or "Studio"
+                studio_address = owner.studio_address or ""
+                website = owner.website or ""
+                instagram_url = owner.instagram_url or ""
+                facebook_url = owner.facebook_url or ""
+                youtube_url = owner.youtube_url or ""
                 og_title = f"{studio_name} — Client Gallery"
                 og_desc = f"Your photos from {studio_name} are ready. View, download & select your favourites."
                 if owner.cover_image_url:
                     og_image = owner.cover_image_url
+                    cover_image_url = owner.cover_image_url
                 elif owner.avatar_url:
                     og_image = owner.avatar_url
+                if owner.avatar_url:
+                    avatar_url = owner.avatar_url
     except Exception:
         pass  # Silently fall back to defaults — never crash the page load
     
@@ -260,55 +281,115 @@ def shared_web_fallback(share_id: str, db: Session = Depends(get_db)):
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b0f19; color: #f8fafc; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }}
-    .header {{ width: 100%; max-width: 1200px; padding: 1.25rem 1.5rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1e293b; background: #0f172a; position: sticky; top: 0; z-index: 50; }}
+    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b0f19; color: #f8fafc; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; overflow-x: hidden; }}
+    .header {{ width: 100%; max-width: 1200px; padding: 1.25rem 1.5rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 50; }}
     .brand {{ display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: #fff; font-weight: 800; font-size: 1.25rem; }}
-    .brand-icon {{ width: 36px; height: 36px; background: linear-gradient(135deg, #6366f1, #a855f7); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }}
-    .btn-app {{ background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.4); color: #818cf8; text-decoration: none; padding: 0.5rem 1rem; border-radius: 0.5rem; font-size: 0.85rem; font-weight: 700; transition: all 0.2s; }}
-    .btn-app:hover {{ background: rgba(99, 102, 241, 0.25); color: #fff; }}
+    .brand-icon {{ width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: rgba(255,255,255,0.1); }}
+    .btn-app {{ background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.4); color: #818cf8; text-decoration: none; padding: 0.5rem 1rem; border-radius: 0.5rem; font-size: 0.85rem; font-weight: 700; transition: all 0.2s; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }}
+    .btn-app:hover {{ background: rgba(99, 102, 241, 0.3); color: #fff; border-color: rgba(99, 102, 241, 0.6); }}
+    .btn-app.active {{ background: rgba(99, 102, 241, 0.8); color: #fff; border-color: #6366f1; }}
 
-    .main-container {{ width: 100%; max-width: 1200px; padding: 2rem 1.5rem; flex: 1; display: flex; flex-direction: column; align-items: center; }}
-    .card {{ background: #1e293b; border: 1px solid #334155; padding: 2.5rem 2rem; border-radius: 1.25rem; max-width: 440px; width: 100%; box-shadow: 0 20px 40px rgba(0,0,0,0.6); text-align: center; margin-top: 3rem; }}
+    .main-container {{ width: 100%; max-width: 1200px; padding: 2rem 1.5rem; flex: 1; display: flex; flex-direction: column; align-items: center; position: relative; }}
+    .card {{ background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.1); padding: 2.5rem 2rem; border-radius: 1.25rem; max-width: 440px; width: 100%; box-shadow: 0 20px 40px rgba(0,0,0,0.4); text-align: center; margin-top: 3rem; }}
     .card-icon {{ font-size: 3rem; margin-bottom: 1rem; display: block; }}
     .card h2 {{ font-size: 1.5rem; color: #fff; margin-bottom: 0.5rem; font-weight: 800; }}
     .card p {{ font-size: 0.9rem; color: #94a3b8; margin-bottom: 1.5rem; line-height: 1.5; }}
     
     .form-group {{ display: flex; flex-direction: column; gap: 0.75rem; width: 100%; text-align: left; }}
     .form-group label {{ font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; }}
-    .input-field {{ background: #0f172a; border: 1px solid #334155; color: #fff; padding: 0.8rem 1rem; border-radius: 0.5rem; font-size: 1rem; outline: none; width: 100%; transition: border-color 0.2s; }}
-    .input-field:focus {{ border-color: #6366f1; }}
-    .btn-submit {{ background: linear-gradient(135deg, #6366f1, #a855f7); color: #fff; border: none; padding: 0.85rem 1.5rem; border-radius: 0.5rem; font-size: 0.95rem; font-weight: 700; cursor: pointer; width: 100%; margin-top: 0.5rem; transition: opacity 0.2s; }}
-    .btn-submit:hover {{ opacity: 0.9; }}
+    .input-field {{ background: rgba(15, 23, 42, 0.6); border: 1px solid #334155; color: #fff; padding: 0.8rem 1rem; border-radius: 0.5rem; font-size: 1rem; outline: none; width: 100%; transition: border-color 0.2s, box-shadow 0.2s; }}
+    .input-field:focus {{ border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.2); }}
+    .btn-submit {{ background: linear-gradient(135deg, #6366f1, #a855f7); color: #fff; border: none; padding: 0.85rem 1.5rem; border-radius: 0.5rem; font-size: 0.95rem; font-weight: 700; cursor: pointer; width: 100%; margin-top: 0.5rem; transition: transform 0.1s, opacity 0.2s; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3); display: inline-flex; align-items: center; justify-content: center; }}
+    .btn-submit:hover {{ opacity: 0.95; transform: translateY(-1px); }}
+    .btn-submit:active {{ transform: translateY(1px); }}
     .error-msg {{ color: #f87171; font-size: 0.85rem; font-weight: 600; margin-top: 0.5rem; display: none; }}
 
-    .gallery-header {{ width: 100%; text-align: left; margin-bottom: 2rem; border-bottom: 1px solid #1e293b; padding-bottom: 1.5rem; }}
-    .gallery-header h1 {{ font-size: 2rem; font-weight: 800; color: #fff; margin-bottom: 0.5rem; }}
-    .gallery-header p {{ color: #94a3b8; font-size: 0.95rem; line-height: 1.5; }}
-    .gallery-stats {{ margin-top: 0.75rem; font-size: 0.85rem; font-weight: 600; color: #818cf8; display: inline-block; background: rgba(99,102,241,0.12); padding: 0.3rem 0.75rem; border-radius: 1rem; }}
+    .gallery-header {{ width: 100%; text-align: left; margin-bottom: 2rem; padding-bottom: 1.5rem; position: relative; }}
+    .gallery-header::after {{ content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 1px; background: linear-gradient(90deg, rgba(255,255,255,0.1), transparent); }}
+    .gallery-header h1 {{ font-size: 2.25rem; font-weight: 800; color: #fff; margin-bottom: 0.5rem; letter-spacing: -0.02em; }}
+    .gallery-header p {{ color: #94a3b8; font-size: 0.95rem; line-height: 1.5; max-width: 600px; }}
+    .gallery-stats {{ margin-top: 0.75rem; font-size: 0.85rem; font-weight: 600; color: #a855f7; display: inline-block; background: rgba(168,85,247,0.12); padding: 0.3rem 0.75rem; border-radius: 1rem; border: 1px solid rgba(168,85,247,0.2); }}
 
-    .grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.5rem; width: 100%; }}
-    .grid-item {{ aspect-ratio: 1 / 1; border-radius: 0.5rem; overflow: hidden; background: #1e293b; position: relative; cursor: pointer; border: 1px solid #334155; transition: transform 0.2s, box-shadow 0.2s; }}
-    .grid-item:hover {{ transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0,0,0,0.5); }}
-    .grid-item img {{ width: 100%; height: 100%; object-fit: cover; }}
+    .actions-row {{ display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.25rem; align-items: center; }}
 
-    .lightbox {{ display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 100; align-items: center; justify-content: center; flex-direction: column; padding: 1.5rem; }}
-    .lightbox img {{ max-width: 90vw; max-height: 80vh; object-fit: contain; border-radius: 0.5rem; }}
-    .lightbox-close {{ position: absolute; top: 1.5rem; right: 1.5rem; color: #fff; font-size: 2rem; cursor: pointer; border: none; background: none; }}
+    .grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.75rem; width: 100%; }}
+    .grid-item {{ aspect-ratio: 1 / 1; border-radius: 0.75rem; overflow: hidden; background: #1e293b; position: relative; cursor: pointer; border: 2px solid transparent; transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s, border-color 0.2s; }}
+    .grid-item:hover {{ transform: scale(1.02); box-shadow: 0 10px 20px rgba(0,0,0,0.5); z-index: 2; }}
+    .grid-item img {{ width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s ease; }}
+    .grid-item:hover img {{ transform: scale(1.05); }}
+    
+    .grid-item.selected {{ border-color: #3b82f6; transform: scale(0.95); opacity: 0.8; }}
+    .grid-item.selected:hover {{ transform: scale(0.95); }}
+    .grid-item.selected::after {{ content: '✓'; position: absolute; top: 0.5rem; right: 0.5rem; background: #3b82f6; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }}
+
+    .lightbox {{ display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); backdrop-filter: blur(5px); z-index: 100; align-items: center; justify-content: center; flex-direction: column; padding: 1.5rem; opacity: 0; transition: opacity 0.3s ease; }}
+    .lightbox.show {{ display: flex; opacity: 1; }}
+    .lightbox img {{ max-width: 90vw; max-height: 80vh; object-fit: contain; border-radius: 0.5rem; box-shadow: 0 20px 40px rgba(0,0,0,0.6); user-select: none; transition: transform 0.2s ease; }}
+    .lightbox-close {{ position: absolute; top: 1.5rem; right: 1.5rem; color: #fff; font-size: 2.5rem; cursor: pointer; border: none; background: rgba(0,0,0,0.3); width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: background 0.2s; z-index: 101; }}
+    .lightbox-close:hover {{ background: rgba(255,255,255,0.2); }}
+    
+    .lightbox-nav {{ position: absolute; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.5); color: white; border: none; width: 50px; height: 50px; border-radius: 50%; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s, transform 0.2s; z-index: 101; }}
+    .lightbox-nav:hover {{ background: rgba(255,255,255,0.2); transform: translateY(-50%) scale(1.1); }}
+    .lightbox-nav.prev {{ left: 1.5rem; }}
+    .lightbox-nav.next {{ right: 1.5rem; }}
+
     .spinner {{ width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.1); border-left-color: #6366f1; border-radius: 50%; animation: spin 1s linear infinite; margin-top: 4rem; }}
     @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+    
+    #selection-bar {{ display: none; position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(100px); background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.1); padding: 0.75rem 1.25rem; border-radius: 2rem; z-index: 90; align-items: center; gap: 1rem; box-shadow: 0 20px 40px rgba(0,0,0,0.6); transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }}
+    #selection-bar.show {{ display: flex; transform: translateX(-50%) translateY(0); }}
+
+    .studio-hero {{ width: 100%; max-width: 1200px; margin: 2rem auto 0; border-radius: 1.25rem; overflow: hidden; background: #1e293b; position: relative; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }}
+    .studio-cover {{ width: 100%; height: 200px; position: relative; }}
+    .studio-cover img {{ width: 100%; height: 100%; object-fit: cover; }}
+    .studio-cover::after {{ content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(15,23,42,0.9), transparent); }}
+    .studio-profile {{ display: flex; align-items: flex-end; padding: 0 2rem 2rem; margin-top: -3rem; position: relative; z-index: 2; gap: 1.5rem; }}
+    .studio-avatar {{ width: 100px; height: 100px; border-radius: 50%; border: 4px solid #0f172a; overflow: hidden; background: #1e293b; flex-shrink: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }}
+    .studio-avatar img {{ width: 100%; height: 100%; object-fit: cover; }}
+    .studio-info h2 {{ font-size: 2rem; color: #fff; font-weight: 800; margin: 0; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }}
+
+    @media (max-width: 600px) {{
+      .studio-hero {{ margin: 1rem auto 0; border-radius: 0; border-left: none; border-right: none; }}
+      .studio-cover {{ height: 150px; }}
+      .studio-profile {{ flex-direction: column; align-items: center; text-align: center; margin-top: -3rem; padding: 0 1.5rem 1.5rem; }}
+      .studio-avatar {{ width: 80px; height: 80px; }}
+      .studio-info h2 {{ font-size: 1.5rem; }}
+      .grid {{ grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 0.5rem; }}
+      .gallery-header h1 {{ font-size: 1.75rem; }}
+      .lightbox-nav {{ width: 40px; height: 40px; font-size: 1.2rem; }}
+      .lightbox-nav.prev {{ left: 0.5rem; }}
+      .lightbox-nav.next {{ right: 0.5rem; }}
+      #selection-bar {{ width: 90%; max-width: 400px; justify-content: space-between; padding: 0.75rem; flex-wrap: wrap; }}
+      #download-selected-btn {{ flex: 1; }}
+    }}
   </style>
 </head>
 <body>
   <header class="header">
     <a href="#" class="brand">
-      <div class="brand-icon">📷</div>
+      <div class="brand-icon">
+        <img src="https://api.picgallery.in/static/app-logo.png" alt="PicGallery Logo" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'; this.parentElement.innerHTML='📷'; this.parentElement.style.background='linear-gradient(135deg, #6366f1, #a855f7)';" />
+      </div>
       <span>PicGallery</span>
     </a>
-    <!-- Button hidden by default, shown by JS only on mobile devices -->
     <a id="open-app-btn" href="intent://api.picgallery.in/gallery/{share_id}#Intent;scheme=https;package=com.mk.picgallery;end" class="btn-app" style="display:none;">Open in App</a>
   </header>
 
-  <main class="main-container">
+  <div class="studio-hero">
+    <div class="studio-cover" style="background: linear-gradient(135deg, #334155, #0f172a);">
+      {f'<img src="{cover_image_url}" alt="Cover" />' if cover_image_url else ''}
+    </div>
+    <div class="studio-profile">
+      <div class="studio-avatar">
+        <img src="{avatar_url}" alt="Avatar" onerror="this.src='https://api.picgallery.in/static/og-default.png'" />
+      </div>
+      <div class="studio-info">
+        <h2>{studio_name}</h2>
+      </div>
+    </div>
+  </div>
+
+  <main class="main-container" style="padding-top: 1rem;">
     <div id="loader" class="spinner"></div>
 
     <div id="card-view" class="card" style="display:none;">
@@ -327,7 +408,7 @@ def shared_web_fallback(share_id: str, db: Session = Depends(get_db)):
         <input type="file" id="face-search-input-card" accept="image/*" style="display:none" onchange="runFaceSearch(event)" />
         <input type="file" id="face-search-camera-card" accept="image/*" capture="user" style="display:none" onchange="runFaceSearch(event)" />
         <button class="btn-submit" onclick="document.getElementById('face-search-input-card').click()">🖼️ Upload Selfie</button>
-        <button class="btn-submit" onclick="document.getElementById('face-search-camera-card').click()" style="background: rgba(99,102,241,0.15); color: #818cf8; border: 1px solid rgba(99,102,241,0.4);">📷 Take Selfie</button>
+        <button class="btn-submit" onclick="document.getElementById('face-search-camera-card').click()" style="background: rgba(99,102,241,0.15); color: #818cf8; border: 1px solid rgba(99,102,241,0.4); box-shadow: none;">📷 Take Selfie</button>
         <div id="face-search-status-card" class="error-msg" style="color: #94a3b8; display: block; font-weight: normal; margin-top: 0.75rem;"></div>
       </div>
     </div>
@@ -335,31 +416,44 @@ def shared_web_fallback(share_id: str, db: Session = Depends(get_db)):
     <div id="gallery-view" style="display:none; width: 100%;">
       <div class="gallery-header">
         <div id="gallery-header-top" style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
-          <button id="back-btn" class="btn-app" style="display:none; cursor: pointer;">← Back</button>
+          <button id="back-btn" class="btn-app" style="display:none;">← Back</button>
           <h1 id="gallery-title" style="margin-bottom: 0;">Gallery</h1>
         </div>
         <p id="gallery-desc"></p>
-        <div>
+        
+        <div class="actions-row">
           <div id="gallery-count" class="gallery-stats">0 photos</div>
-          <button id="download-all-btn" class="btn-app" style="display:none; margin-left: 0.5rem; cursor: pointer; padding: 0.3rem 0.75rem; font-size: 0.85rem;">📦 Download All</button>
+          <button id="download-all-btn" class="btn-app" style="display:none;">📦 Download All</button>
+          <button id="select-mode-btn" class="btn-app" style="display:none;" onclick="toggleSelectMode()">✓ Select</button>
+          
+          <div id="face-search-container" style="display:none; display: flex; gap: 0.5rem; align-items: center;">
+            <input type="file" id="face-search-input" accept="image/*" style="display:none" onchange="runFaceSearch(event)" />
+            <input type="file" id="face-search-camera" accept="image/*" capture="user" style="display:none" onchange="runFaceSearch(event)" />
+            <button class="btn-app" onclick="document.getElementById('face-search-input').click()">🖼️ Find My Photos</button>
+            <button class="btn-app" onclick="document.getElementById('face-search-camera').click()">📷 Selfie</button>
+          </div>
         </div>
-        <div id="face-search-container" style="display:none; margin-top: 1rem;">
-          <input type="file" id="face-search-input" accept="image/*" style="display:none" onchange="runFaceSearch(event)" />
-          <input type="file" id="face-search-camera" accept="image/*" capture="user" style="display:none" onchange="runFaceSearch(event)" />
-          <button class="btn-app" style="cursor:pointer; margin-right: 0.5rem;" onclick="document.getElementById('face-search-input').click()">🖼️ Find My Photos</button>
-          <button class="btn-app" style="cursor:pointer;" onclick="document.getElementById('face-search-camera').click()">📷 Take Selfie</button>
-          <div id="face-search-status" style="font-size:0.85rem; color:#94a3b8; margin-top:0.75rem;"></div>
-        </div>
+        <div id="face-search-status" style="font-size:0.85rem; color:#94a3b8; margin-top:0.75rem;"></div>
       </div>
       <div id="photo-grid" class="grid"></div>
     </div>
   </main>
 
+  <div id="selection-bar">
+    <span id="selection-count" style="font-weight: 700; color: #fff;">0 selected</span>
+    <div style="display: flex; gap: 0.5rem;">
+      <button id="download-selected-btn" class="btn-submit" style="margin:0; padding: 0.5rem 1rem;">Download Selected</button>
+      <button class="btn-app" style="margin:0; padding: 0.5rem 1rem; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2);" onclick="toggleSelectMode()">Cancel</button>
+    </div>
+  </div>
+
   <div id="lightbox" class="lightbox" onclick="closeLightbox(event)">
     <button class="lightbox-close" onclick="closeLightbox(event)">&times;</button>
+    <button class="lightbox-nav prev" onclick="navigateLightbox(-1, event)">&#10094;</button>
     <img id="lightbox-img" src="" alt="Full preview" />
-    <div id="lightbox-actions" style="position: absolute; bottom: 2rem; display: flex; gap: 1rem;">
-      <a id="lightbox-download-btn" href="#" download class="btn-app" style="display:none; padding: 0.75rem 1.5rem; text-decoration: none;" onclick="event.stopPropagation()">⬇️ Download Photo</a>
+    <button class="lightbox-nav next" onclick="navigateLightbox(1, event)">&#10095;</button>
+    <div id="lightbox-actions" style="position: absolute; bottom: 2rem; display: flex; gap: 1rem; z-index: 101;">
+      <a id="lightbox-download-btn" href="#" download class="btn-app" style="display:none; padding: 0.75rem 1.5rem; text-decoration: none; background: rgba(15,23,42,0.8); backdrop-filter: blur(8px); border-color: rgba(255,255,255,0.2); color: white;" onclick="event.stopPropagation()">⬇️ Download</a>
     </div>
   </div>
 
@@ -367,16 +461,23 @@ def shared_web_fallback(share_id: str, db: Session = Depends(get_db)):
     const shareToken = "{share_id}";
     const apiBase = "/api/v1/public/galleries/";
 
-    // Only show "Open in App" button on mobile devices
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     if (isMobile) {{
       const appBtn = document.getElementById('open-app-btn');
       appBtn.style.display = 'inline-block';
-      // For iOS, change the href to the custom scheme since intent:// is Android only
       if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {{
         appBtn.href = "picgallery://gallery/" + shareToken;
       }}
     }}
+
+    let currentGalleryData = null;
+    let isFolderRoot = false;
+    let currentMediaList = [];
+    let currentMediaIndex = -1;
+    
+    // Selection state
+    let isSelectMode = false;
+    let selectedMediaIds = new Set();
 
     async function loadGallery(password = "") {{
       const loader = document.getElementById("loader");
@@ -387,6 +488,9 @@ def shared_web_fallback(share_id: str, db: Session = Depends(get_db)):
       loader.style.display = "block";
       cardView.style.display = "none";
       galleryView.style.display = "none";
+      isSelectMode = false;
+      selectedMediaIds.clear();
+      updateSelectionUI();
 
       try {{
         let url = apiBase + shareToken;
@@ -398,7 +502,6 @@ def shared_web_fallback(share_id: str, db: Session = Depends(get_db)):
         loader.style.display = "none";
 
         if (res.status === 401) {{
-          // Password required or invalid password
           cardView.style.display = "block";
           document.getElementById("passcode-form").style.display = "flex";
           if (password) {{
@@ -428,7 +531,6 @@ def shared_web_fallback(share_id: str, db: Session = Depends(get_db)):
           cardView.style.display = "block";
           document.getElementById("card-icon").innerText = "📱";
           document.getElementById("card-title").innerText = "Private Client Album";
-          
           if (isMobile) {{
             document.getElementById("card-desc").innerText = "This album is private and shared specifically with a client. Tap 'Open in App' above to view it in the PicGallery app.";
           }} else {{
@@ -444,7 +546,6 @@ def shared_web_fallback(share_id: str, db: Session = Depends(get_db)):
           return;
         }}
 
-        // Successfully loaded gallery!
         currentGalleryData = data;
         
         if (data.kind === 'face_search' && (!data.media || data.media.length === 0)) {{
@@ -472,16 +573,15 @@ def shared_web_fallback(share_id: str, db: Session = Depends(get_db)):
       if (pwd) loadGallery(pwd);
     }}
 
-    let currentGalleryData = null;
-    let isFolderRoot = false;
-
     async function loadAlbum(albumId, password = "") {{
       const loader = document.getElementById("loader");
       const galleryView = document.getElementById("gallery-view");
-      const errorMsg = document.getElementById("error-msg");
       
       galleryView.style.display = "none";
       loader.style.display = "block";
+      isSelectMode = false;
+      selectedMediaIds.clear();
+      updateSelectionUI();
       
       try {{
         let url = apiBase + shareToken + "/albums/" + albumId;
@@ -503,6 +603,64 @@ def shared_web_fallback(share_id: str, db: Session = Depends(get_db)):
       }}
     }}
 
+    function toggleSelectMode() {{
+      isSelectMode = !isSelectMode;
+      const btn = document.getElementById("select-mode-btn");
+      if (isSelectMode) {{
+        btn.classList.add("active");
+        btn.innerText = "Done";
+      }} else {{
+        btn.classList.remove("active");
+        btn.innerText = "✓ Select";
+        selectedMediaIds.clear();
+      }}
+      updateSelectionUI();
+    }}
+
+    function updateSelectionUI() {{
+      const bar = document.getElementById("selection-bar");
+      const countText = document.getElementById("selection-count");
+      
+      if (isSelectMode) {{
+        bar.classList.add("show");
+        countText.innerText = selectedMediaIds.size + " selected";
+      }} else {{
+        bar.classList.remove("show");
+      }}
+
+      const items = document.querySelectorAll(".grid-item[data-media-id]");
+      items.forEach(item => {{
+        const id = item.getAttribute("data-media-id");
+        if (selectedMediaIds.has(id)) {{
+          item.classList.add("selected");
+        }} else {{
+          item.classList.remove("selected");
+        }}
+      }});
+    }}
+
+    function toggleSelection(mediaId, event) {{
+      if (selectedMediaIds.has(mediaId)) {{
+        selectedMediaIds.delete(mediaId);
+      }} else {{
+        selectedMediaIds.add(mediaId);
+      }}
+      updateSelectionUI();
+    }}
+
+    function getDownloadUrl(mediaIdsArray = null) {{
+      let dlUrl = "/api/v1/public/share-links/" + shareToken + "/download-zip";
+      const pwd = document.getElementById("passcode-input").value;
+      if (pwd) dlUrl += "?password=" + encodeURIComponent(pwd);
+      if (currentGalleryData && currentGalleryData.album) {{
+        dlUrl += (dlUrl.includes("?") ? "&" : "?") + "album_id=" + currentGalleryData.album.id;
+      }}
+      if (mediaIdsArray && mediaIdsArray.length > 0) {{
+        dlUrl += (dlUrl.includes("?") ? "&" : "?") + "media_ids=" + mediaIdsArray.join(",");
+      }}
+      return dlUrl;
+    }}
+
     function renderGallery(data, fromFolder = false) {{
       currentGalleryData = data;
       document.getElementById("gallery-view").style.display = "block";
@@ -513,7 +671,7 @@ def shared_web_fallback(share_id: str, db: Session = Depends(get_db)):
       
       const backBtn = document.getElementById("back-btn");
       if (fromFolder && isFolderRoot) {{
-        backBtn.style.display = "inline-block";
+        backBtn.style.display = "inline-flex";
         backBtn.onclick = () => {{
            loadGallery(document.getElementById("passcode-input").value);
         }};
@@ -526,6 +684,7 @@ def shared_web_fallback(share_id: str, db: Session = Depends(get_db)):
       
       const mediaList = data.media || [];
       const albumList = data.albums || [];
+      currentMediaList = mediaList;
       
       if (!fromFolder && albumList.length > 0) {{
          document.getElementById("gallery-count").innerText = albumList.length + " albums";
@@ -533,19 +692,31 @@ def shared_web_fallback(share_id: str, db: Session = Depends(get_db)):
          document.getElementById("gallery-count").innerText = mediaList.length + " photos";
       }}
       
+      const dlAllBtn = document.getElementById("download-all-btn");
+      const selectBtn = document.getElementById("select-mode-btn");
+      
       if (data.allow_download) {{
         document.getElementById("lightbox-download-btn").style.display = "block";
-        document.getElementById("download-all-btn").style.display = "inline-block";
-        document.getElementById("download-all-btn").onclick = () => {{
-          let dlUrl = "/api/v1/public/share-links/" + shareToken + "/download-zip";
-          const pwd = document.getElementById("passcode-input").value;
-          if (pwd) dlUrl += "?password=" + encodeURIComponent(pwd);
-          if (data.album) dlUrl += (dlUrl.includes("?") ? "&" : "?") + "album_id=" + data.album.id;
-          window.location.href = dlUrl;
-        }};
+        dlAllBtn.style.display = "inline-flex";
+        dlAllBtn.onclick = () => {{ window.location.href = getDownloadUrl(); }};
+        
+        if (mediaList.length > 0 && albumList.length === 0) {{
+           selectBtn.style.display = "inline-flex";
+           document.getElementById("download-selected-btn").onclick = () => {{
+             if (selectedMediaIds.size === 0) return alert("Please select at least one photo.");
+             window.location.href = getDownloadUrl(Array.from(selectedMediaIds));
+             toggleSelectMode(); 
+           }};
+        }} else {{
+           selectBtn.style.display = "none";
+        }}
+      }} else {{
+        dlAllBtn.style.display = "none";
+        selectBtn.style.display = "none";
       }}
       
-      document.getElementById("face-search-container").style.display = "block";
+      const faceSearchContainer = document.getElementById("face-search-container");
+      faceSearchContainer.style.display = "flex";
 
       const grid = document.getElementById("photo-grid");
       grid.innerHTML = "";
@@ -565,37 +736,75 @@ def shared_web_fallback(share_id: str, db: Session = Depends(get_db)):
           grid.appendChild(item);
         }});
       }} else {{
-        mediaList.forEach(m => {{
+        mediaList.forEach((m, index) => {{
           const item = document.createElement("div");
           item.className = "grid-item";
+          item.setAttribute("data-media-id", m.id);
           const imgUrl = m.thumbnail_url || m.file_url;
           item.innerHTML = `<img src="${{imgUrl}}" alt="${{m.file_name}}" loading="lazy" decoding="async" />`;
-          item.onclick = () => openLightbox(m.file_url, m.id);
+          
+          item.onclick = (e) => {{
+            if (isSelectMode) {{
+              toggleSelection(m.id, e);
+            }} else {{
+              openLightbox(index);
+            }}
+          }};
           grid.appendChild(item);
         }});
       }}
     }}
 
-    function openLightbox(url, mediaId) {{
-      document.getElementById("lightbox-img").src = url;
+    function openLightbox(index) {{
+      currentMediaIndex = index;
+      updateLightboxContent();
+      const lightbox = document.getElementById("lightbox");
+      lightbox.classList.add("show");
+      document.body.style.overflow = 'hidden';
+    }}
+
+    function navigateLightbox(dir, event) {{
+      if (event) event.stopPropagation();
+      if (currentMediaList.length === 0) return;
+      currentMediaIndex = (currentMediaIndex + dir + currentMediaList.length) % currentMediaList.length;
+      updateLightboxContent();
+    }}
+
+    function updateLightboxContent() {{
+      if (currentMediaIndex < 0 || currentMediaIndex >= currentMediaList.length) return;
+      const m = currentMediaList[currentMediaIndex];
+      const img = document.getElementById("lightbox-img");
+      img.src = ""; 
+      img.src = m.file_url;
+      
       const dlBtn = document.getElementById("lightbox-download-btn");
-      dlBtn.href = url;
+      dlBtn.href = m.file_url;
       dlBtn.onclick = (e) => {{
          e.stopPropagation();
-         // Optionally hit the /download endpoint here to record it
          fetch("/api/v1/public/share-links/" + shareToken + "/download", {{
            method: "POST",
            headers: {{"Content-Type": "application/json"}},
-           body: JSON.stringify({{media_id: mediaId, downloader_label: "Web Guest"}})
+           body: JSON.stringify({{media_id: m.id, downloader_label: "Web Guest"}})
          }}).catch(err => console.error("Could not record download", err));
       }};
-      document.getElementById("lightbox").style.display = "flex";
     }}
 
     function closeLightbox(e) {{
-      if (e.target.id === "lightbox-img" || e.target.id === "lightbox-download-btn") return;
-      document.getElementById("lightbox").style.display = "none";
+      if (e.target.tagName === "IMG" || e.target.id === "lightbox-download-btn" || e.target.classList.contains("lightbox-nav")) return;
+      const lightbox = document.getElementById("lightbox");
+      lightbox.classList.remove("show");
+      document.body.style.overflow = '';
+      document.getElementById("lightbox-img").src = ""; 
     }}
+    
+    document.addEventListener('keydown', (e) => {{
+      const lightbox = document.getElementById("lightbox");
+      if (lightbox.classList.contains("show")) {{
+        if (e.key === 'Escape') closeLightbox(e);
+        if (e.key === 'ArrowRight') navigateLightbox(1);
+        if (e.key === 'ArrowLeft') navigateLightbox(-1);
+      }}
+    }});
 
     async function runFaceSearch(event) {{
       const file = event.target.files[0];
@@ -619,19 +828,10 @@ def shared_web_fallback(share_id: str, db: Session = Depends(get_db)):
           body: formData
         }});
         
-        // Safely parse JSON — if the server crashes it may return HTML
         let data = null;
         const contentType = res.headers.get("content-type") || "";
         if (contentType.includes("application/json")) {{
-          try {{
-            data = await res.json();
-          }} catch (parseErr) {{
-            console.error("Failed to parse JSON:", parseErr);
-          }}
-        }} else {{
-          // Server returned HTML (e.g. 500/502/504 gateway error)
-          const text = await res.text();
-          console.error("Non-JSON response:", res.status, text.substring(0, 200));
+          try {{ data = await res.json(); }} catch (e) {{}}
         }}
         
         if (!res.ok) {{
@@ -644,30 +844,21 @@ def shared_web_fallback(share_id: str, db: Session = Depends(get_db)):
           return;
         }}
         
-        if (!data) {{
-          if (statusDiv) statusDiv.innerText = "Unexpected server response. Please try again.";
-          if (statusCardDiv) statusCardDiv.innerText = "Unexpected server response. Please try again.";
-          return;
-        }}
+        if (!data) return;
         
         if (data.matches && data.matches.length > 0) {{
            if (statusDiv) statusDiv.innerText = `Found ${{data.matches.length}} photo(s) with your face!`;
            if (statusCardDiv) statusCardDiv.innerText = "";
            
-           // Hide card view if it was showing
            const cardView = document.getElementById("card-view");
            if (cardView) cardView.style.display = "none";
            
-           // re-render the grid with just the matches
            if (!currentGalleryData) currentGalleryData = {{}};
            currentGalleryData.media = data.matches.map(m => m.media);
-           
-           // Ensure it shows photos, not albums
            currentGalleryData.albums = []; 
            
            renderGallery(currentGalleryData);
            
-           // add a reset button
            const faceContainer = document.getElementById("face-search-container");
            if (faceContainer && !document.getElementById("reset-search-btn")) {{
              const resetBtn = document.createElement("button");
@@ -675,7 +866,6 @@ def shared_web_fallback(share_id: str, db: Session = Depends(get_db)):
              resetBtn.innerText = "✖ Clear Search";
              resetBtn.className = "btn-app";
              resetBtn.style.cursor = "pointer";
-             resetBtn.style.marginLeft = "10px";
              resetBtn.onclick = () => {{ 
                 resetBtn.remove(); 
                 if (statusDiv) statusDiv.innerText = ""; 
@@ -695,7 +885,6 @@ def shared_web_fallback(share_id: str, db: Session = Depends(get_db)):
       }}
     }}
 
-    // Initial load
     loadGallery();
   </script>
 </body>

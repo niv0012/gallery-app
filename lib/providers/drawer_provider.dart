@@ -184,7 +184,7 @@ class SubscriptionStateNotifier extends AsyncNotifier<SubscriptionState> {
       plan: plan,
       activatedAt: user.planStartedAt,
       expiresAt: user.planExpiry,
-      isTrial: user.subscriptionStatus == 'trial',
+      isTrial: user.subscriptionStatus == 'trial' && !isExpired,
     );
   }
 

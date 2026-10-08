@@ -1522,6 +1522,7 @@ def download_zip_shared_gallery(
     password: str | None = Query(default=None),
     pin: str | None = Query(default=None),
     album_id: uuid.UUID | None = Query(default=None),
+    media_ids: str | None = Query(default=None),
     user: User | None = Depends(get_optional_current_user),
     db: Session = Depends(get_db),
 ):
@@ -1620,6 +1621,12 @@ def download_zip_shared_gallery(
 
             media = list(album_media) + list(loose_items)
             zip_name = f"{target_folder.name}.zip"
+
+    if media_ids:
+        selected_ids = {m_id.strip() for m_id in media_ids.split(",")}
+        media = [m for m in media if str(m.id) in selected_ids]
+        if zip_name.endswith(".zip"):
+            zip_name = zip_name[:-4] + "_selected.zip"
 
     if not media:
         raise HTTPException(status_code=404, detail="No photos to download.")

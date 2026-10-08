@@ -21,7 +21,7 @@ class SubscriptionPlansScreen extends ConsumerStatefulWidget {
 }
 
 class _SubscriptionPlansScreenState
-    extends ConsumerState<SubscriptionPlansScreen> {
+    extends ConsumerState<SubscriptionPlansScreen> with WidgetsBindingObserver {
   late SubscriptionPlanModel _selectedPlan;
   final ScrollController _scrollController = ScrollController();
 
@@ -32,6 +32,7 @@ class _SubscriptionPlansScreenState
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Initialize to Yearly plan as the default selected option
     _selectedPlan = SubscriptionPlanModel.forType(SubscriptionPlan.premium);
 
@@ -46,7 +47,16 @@ class _SubscriptionPlansScreenState
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Refresh user plan in case they just returned from the payment website
+      ref.read(authProvider.notifier).refreshMe();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _scrollController.dispose();
     super.dispose();
   }
@@ -129,11 +139,16 @@ class _SubscriptionPlansScreenState
       body: Stack(
         children: [
           SafeArea(
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md, vertical: AppSpacing.md),
-              physics: const BouncingScrollPhysics(),
+            child: RefreshIndicator(
+              onRefresh: () async {
+                await ref.read(authProvider.notifier).refreshMe();
+              },
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics()),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md, vertical: AppSpacing.md),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -479,8 +494,9 @@ class _SubscriptionPlansScreenState
 
                   // Current Plan Status Details
                   _CurrentPlanStatusCard(
-                    subState: ref.watch(subscriptionStateProvider).valueOrNull,
+                    subState: subState,
                     currentPlan: currentModel,
+                    trialUsed: trialUsed,
                     onExploreTap: () {
                       _scrollController.animateTo(
                         0,
@@ -493,6 +509,7 @@ class _SubscriptionPlansScreenState
                 ],
               ),
             ),
+          ),
           ),
         ],
       ),
@@ -967,11 +984,13 @@ class _PlanCard extends StatelessWidget {
 class _CurrentPlanStatusCard extends StatelessWidget {
   final SubscriptionPlanModel currentPlan;
   final SubscriptionState? subState;
+  final bool trialUsed;
   final VoidCallback onExploreTap;
 
   const _CurrentPlanStatusCard({
     required this.currentPlan,
     this.subState,
+    required this.trialUsed,
     required this.onExploreTap,
   });
 
@@ -980,6 +999,7 @@ class _CurrentPlanStatusCard extends StatelessWidget {
     final isFree = currentPlan.planType == SubscriptionPlan.free;
     final isTrial = subState?.isTrial == true;
     final isBasic = isFree && !isTrial;
+    final hasExpiredTrial = isBasic && trialUsed;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -997,7 +1017,7 @@ class _CurrentPlanStatusCard extends StatelessWidget {
             children: [
               Icon(
                 isBasic ? Icons.info_outline_rounded : Icons.verified_rounded,
-                color: isBasic ? context.textMuted : AppColors.gold,
+                color: isBasic ? (hasExpiredTrial ? AppColors.error : context.textMuted) : AppColors.gold,
                 size: 22,
               ),
               const SizedBox(width: 8),
@@ -1014,11 +1034,11 @@ class _CurrentPlanStatusCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           if (isBasic) ...[
             Text(
-              "No Active Plan",
+              hasExpiredTrial ? "Your Trial has Expired" : "No Active Plan",
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
-                color: context.textPrimary.withValues(alpha: 0.85),
+                color: hasExpiredTrial ? AppColors.error : context.textPrimary.withValues(alpha: 0.85),
               ),
             ),
             const SizedBox(height: AppSpacing.md),
