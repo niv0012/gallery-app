@@ -1,8 +1,10 @@
 import asyncio
 import contextlib
 import mimetypes
-mimetypes.add_type("video/mp4", ".mov")
-mimetypes.add_type("video/mp4", ".MOV")
+mimetypes.add_type("video/quicktime", ".mov")
+mimetypes.add_type("video/quicktime", ".MOV")
+mimetypes.add_type("video/mp4", ".mp4")
+mimetypes.add_type("video/mp4", ".MP4")
 
 import re
 from pathlib import Path

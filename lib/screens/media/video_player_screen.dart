@@ -1107,11 +1107,6 @@ class _VideoPlayerItemState extends State<_VideoPlayerItem> {
               formatHint: source.path.toLowerCase().contains('.mkv')
                   ? VideoFormat.other
                   : null,
-              httpHeaders: source.network &&
-                      widget.authToken != null &&
-                      widget.authToken!.isNotEmpty
-                  ? {'Authorization': 'Bearer ${widget.authToken}'}
-                  : const {},
             )
           : VideoPlayerController.file(File(source.path));
       try {
