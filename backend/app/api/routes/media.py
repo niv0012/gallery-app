@@ -225,16 +225,27 @@ def upload_media(
                 media_type=media_type,
             )
 
+        db_file_path = relative_path
+        db_file_name = file.filename or "upload"
+        db_content_type = content_type
+
+        from app.core.transcode import CONVERTIBLE_EXTENSIONS
+        suffix = Path(db_file_name).suffix
+        if media_type == MediaType.video and suffix.lower() in CONVERTIBLE_EXTENSIONS:
+            db_file_path = f"{current_user.id}/{media_id}/original.mp4"
+            db_file_name = str(Path(db_file_name).with_suffix(".mp4"))
+            db_content_type = "video/mp4"
+
         media = Media(
             id=media_id,
             owner_id=current_user.id,
             album_id=album_id,
             folder_id=folder_id,
             media_type=media_type,
-            file_name=file.filename or "upload",
-            file_path=relative_path,
+            file_name=db_file_name,
+            file_path=db_file_path,
             thumbnail_path=thumbnail_path,
-            content_type=content_type,
+            content_type=db_content_type,
             size_bytes=size,
             width=width,
             height=height,

@@ -540,7 +540,12 @@ class AppRoutes {
       case mediaDetails:
         final args = settings.arguments as MediaDetailsArgs;
         return _slide(
-            MediaDetailsScreen(mediaId: args.mediaId, mediaIds: args.mediaIds), settings);
+            MediaDetailsScreen(
+              mediaId: args.mediaId, 
+              mediaIds: args.mediaIds,
+              showWatermark: args.showWatermark,
+              watermarkUrl: args.watermarkUrl,
+            ), settings);
       case imageViewer:
         final args = settings.arguments as ImageViewerArgs;
         return _fade(ImageViewerScreen(

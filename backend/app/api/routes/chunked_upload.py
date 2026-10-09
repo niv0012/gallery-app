@@ -326,6 +326,16 @@ def complete_chunked_upload(
             logger.exception("Failed to stitch local chunks for %s", req.upload_id)
             raise HTTPException(status_code=500, detail="Failed to assemble uploaded file.")
 
+    db_file_path = relative_path
+    db_file_name = req.filename or "upload"
+    db_content_type = req.content_type
+
+    from app.core.transcode import CONVERTIBLE_EXTENSIONS
+    if media_type == MediaType.video and suffix.lower() in CONVERTIBLE_EXTENSIONS:
+        db_file_path = f"{current_user.id}/{req.media_id}/original.mp4"
+        db_file_name = str(Path(db_file_name).with_suffix(".mp4"))
+        db_content_type = "video/mp4"
+
     try:
         media = Media(
             id=req.media_id,
@@ -333,11 +343,12 @@ def complete_chunked_upload(
             album_id=req.album_id,
             folder_id=req.folder_id,
             media_type=media_type,
-            file_name=req.filename or "upload",
-            file_path=relative_path,
+            file_name=db_file_name,
+            file_path=db_file_path,
             thumbnail_path=None,
-            content_type=req.content_type,
+            content_type=db_content_type,
             size_bytes=req.total_size,
+
             width=None,
             height=None,
             duration_ms=None,

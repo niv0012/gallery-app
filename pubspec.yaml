@@ -1,7 +1,7 @@
 name: picgallery
 description: "PicGallery — Premium Photo & Video Management Platform"
 publish_to: 'none'
-version: 1.0.12+1
+version: 1.0.13+1
 
 environment:
   sdk: '>=3.4.0 <4.0.0' 

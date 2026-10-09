@@ -24,6 +24,7 @@ import '../../services/share_service_impl.dart';
 import '../../widgets/media/media_like_button.dart';
 import '../../widgets/media/media_comments_section.dart';
 import '../../widgets/media/download_complete_bottom_sheet.dart';
+import '../../widgets/media/watermark_overlay.dart';
 import '../../widgets/common/custom_app_bar.dart';
 import '../../widgets/common/empty_state_card.dart';
 import 'image_viewer_screen.dart';
@@ -40,8 +41,16 @@ class MediaDetailsArgs {
   final String mediaId;
   final List<String>? mediaIds;
   final String? heroTag;
+  final bool showWatermark;
+  final String? watermarkUrl;
 
-  const MediaDetailsArgs({required this.mediaId, this.mediaIds, this.heroTag});
+  const MediaDetailsArgs({
+    required this.mediaId, 
+    this.mediaIds, 
+    this.heroTag,
+    this.showWatermark = false,
+    this.watermarkUrl,
+  });
 }
 
 /// Media Details — full metadata + primary actions (favorite, delete,
@@ -50,12 +59,16 @@ class MediaDetailsScreen extends ConsumerStatefulWidget {
   final String mediaId;
   final List<String>? mediaIds;
   final String? heroTag;
+  final bool showWatermark;
+  final String? watermarkUrl;
 
   const MediaDetailsScreen({
     super.key,
     required this.mediaId,
     this.mediaIds,
     this.heroTag,
+    this.showWatermark = false,
+    this.watermarkUrl,
   });
 
   @override
@@ -407,12 +420,16 @@ class _MediaDetailsScreenState extends ConsumerState<MediaDetailsScreen> {
                 mediaIds: ids,
                 initialIndex: safeIndex,
                 readOnly: isClientUser,
+                showWatermark: widget.showWatermark,
+                watermarkUrl: widget.watermarkUrl,
               )
             : VideoPlayerArgs(
                 mediaId: media.id,
                 mediaIds: ids,
                 initialIndex: safeIndex,
                 readOnly: isClientUser,
+                showWatermark: widget.showWatermark,
+                watermarkUrl: widget.watermarkUrl,
               ),
       );
     }
@@ -544,6 +561,8 @@ class _MediaDetailsScreenState extends ConsumerState<MediaDetailsScreen> {
                                     ),
                                   ),
                                 ),
+                              if (widget.showWatermark && widget.watermarkUrl != null)
+                                WatermarkOverlay(url: widget.watermarkUrl!),
                             ],
                           ),
                         ),

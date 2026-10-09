@@ -94,10 +94,10 @@ def probe_video(path: Path, ffprobe_binary: str) -> VideoInfo | None:
 
 
 def _video_is_copyable(info: VideoInfo | None) -> bool:
-    """H.264, 8-bit 4:2:0 -> can be stream-copied (no quality loss, very fast)."""
+    """H.264 or HEVC, 8-bit 4:2:0 -> can be stream-copied (no quality loss, very fast)."""
     return bool(
         info
-        and info.video_codec == "h264"
+        and info.video_codec in ("h264", "hevc")
         and info.pix_fmt in ("yuv420p", "yuvj420p")
     )
 
@@ -165,6 +165,8 @@ def normalize_video(local_path: Path, ffmpeg_binary: str, ffprobe_binary: str) -
            "-map", "0:v:0", "-map", "0:a:0?", "-sn", "-dn", "-map_metadata", "0"]
     if copy_video:
         cmd += ["-c:v", "copy"]
+        if info and info.video_codec == "hevc":
+            cmd += ["-tag:v", "hvc1"]
     else:
         cmd += [
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",

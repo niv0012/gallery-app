@@ -23,6 +23,7 @@ import '../../widgets/common/pinch_zoom_grid.dart';
 import '../../widgets/common/snackbar_helper.dart';
 import '../../widgets/common/compact_anchored_dropdown.dart';
 import '../../providers/album_provider.dart';
+import '../../providers/auth_providers.dart';
 import '../../providers/face_search_provider.dart';
 import '../../widgets/media/face_search_actions.dart';
 import '../media/media_batch_workflows.dart';
@@ -32,6 +33,7 @@ import '../albums/albums_list_screen.dart';
 import 'folder_details_screen.dart';
 
 import '../../providers/media_provider.dart';
+import '../../widgets/media/watermark_overlay.dart';
 import '../../providers/zip_job_provider.dart';
 import '../../widgets/folders/safe_delete_dialog.dart';
 
@@ -73,8 +75,10 @@ class _FolderExplorerScreenState extends ConsumerState<FolderExplorerScreen> {
     final l10n = AppLocalizations.of(context)!;
     final folderId = widget.folderId;
     final folderFacade = ref.watch(folderProvider);
-    final prefs = ref.watch(folderExplorerPrefsProvider);
     final contentsAsync = ref.watch(folderContentsProvider(folderId ?? 'root'));
+    final authState = ref.watch(authStateProvider);
+    final prefs = ref.watch(folderExplorerPrefsProvider);
+
     final title = folderId == null
         ? l10n.folderExplorerMyFiles
         : folderFacade.folderById(folderId)?.name ?? l10n.folderExplorerMyFiles;
@@ -103,7 +107,9 @@ class _FolderExplorerScreenState extends ConsumerState<FolderExplorerScreen> {
           return RefreshIndicator(
             onRefresh: () async {
               ref.invalidate(folderContentsProvider(folderId ?? 'root'));
-              await ref.read(folderContentsProvider(folderId ?? 'root').future).catchError((_) {});
+              try {
+                await ref.read(folderContentsProvider(folderId ?? 'root').future);
+              } catch (_) {}
             },
             child: Column(
               children: [
@@ -484,9 +490,7 @@ class _FolderExplorerScreenState extends ConsumerState<FolderExplorerScreen> {
                   CompactAnchoredDropdown<ExplorerSortField>(
                     value: prefs.sortField,
                     onChanged: (value) {
-                      if (value != null) {
-                        ref.read(folderExplorerPrefsProvider.notifier).setSort(value, prefs.ascending);
-                      }
+                      ref.read(folderExplorerPrefsProvider.notifier).setSort(value, prefs.ascending);
                     },
                     items: [
                       DropdownMenuItem(
@@ -683,12 +687,19 @@ class _FolderExplorerScreenState extends ConsumerState<FolderExplorerScreen> {
                     return _MediaGridTile(
                       media: item.media,
                       isSelected: _selectedIds.contains(item.id),
+                      showWatermark: (widget.folderId == null ? null : ref.read(folderProvider).folderById(widget.folderId!))?.showWatermark ?? false,
+                      watermarkUrl: ref.read(authStateProvider).user?.avatarUrl,
                       onTap: () {
                         if (_isSelectionMode) {
                           _toggleSelection(item.id);
                         } else {
                           final mediaIds = items.whereType<MediaItem>().map((i) => i.media.id).toList(growable: false);
-                          Navigator.of(context).pushNamed(AppRoutes.mediaDetails, arguments: MediaDetailsArgs(mediaId: item.media.id, mediaIds: mediaIds));
+                          Navigator.of(context).pushNamed(AppRoutes.mediaDetails, arguments: MediaDetailsArgs(
+                            mediaId: item.media.id, 
+                            mediaIds: mediaIds,
+                            showWatermark: (widget.folderId == null ? null : ref.read(folderProvider).folderById(widget.folderId!))?.showWatermark ?? false,
+                            watermarkUrl: ref.read(authStateProvider).user?.avatarUrl,
+                          ));
                         }
                       },
                       onLongPress: () => _toggleSelection(item.id),
@@ -741,6 +752,16 @@ class _FolderExplorerScreenState extends ConsumerState<FolderExplorerScreen> {
                       const PopupMenuItem(value: _FolderAction.hide, child: Text('Hide')),
                       const PopupMenuItem(value: _FolderAction.share, child: Text('Share')),
                       const PopupMenuItem(value: _FolderAction.download, child: Text('Download')),
+                      PopupMenuItem(
+                        value: _FolderAction.watermark, 
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Watermark'),
+                            if (f.showWatermark == true) const Icon(Icons.check, size: 16, color: AppColors.primary),
+                          ],
+                        ),
+                      ),
                       const PopupMenuItem(value: _FolderAction.faceSearch, child: Text('Face Search')),
                       const PopupMenuItem(value: _FolderAction.delete, child: Text('Delete')),
                     ],
@@ -807,7 +828,12 @@ class _FolderExplorerScreenState extends ConsumerState<FolderExplorerScreen> {
                   _toggleSelection(m.id);
                 } else {
                   final mediaIds = items.whereType<MediaItem>().map((i) => i.media.id).toList(growable: false);
-                  Navigator.of(context).pushNamed(AppRoutes.mediaDetails, arguments: MediaDetailsArgs(mediaId: m.id, mediaIds: mediaIds));
+                  Navigator.of(context).pushNamed(AppRoutes.mediaDetails, arguments: MediaDetailsArgs(
+                    mediaId: m.id, 
+                    mediaIds: mediaIds,
+                    showWatermark: (widget.folderId == null ? null : ref.read(folderProvider).folderById(widget.folderId!))?.showWatermark ?? false,
+                    watermarkUrl: ref.read(authStateProvider).user?.avatarUrl,
+                  ));
                 }
               },
               onLongPress: () => _toggleSelection(m.id),
@@ -853,7 +879,12 @@ class _FolderExplorerScreenState extends ConsumerState<FolderExplorerScreen> {
             date: m.createdAt,
             onTap: () {
               final mediaIds = items.whereType<MediaItem>().map((i) => i.media.id).toList(growable: false);
-              Navigator.of(context).pushNamed(AppRoutes.mediaDetails, arguments: MediaDetailsArgs(mediaId: m.id, mediaIds: mediaIds));
+              Navigator.of(context).pushNamed(AppRoutes.mediaDetails, arguments: MediaDetailsArgs(
+                mediaId: m.id, 
+                mediaIds: mediaIds,
+                showWatermark: (widget.folderId == null ? null : ref.read(folderProvider).folderById(widget.folderId!))?.showWatermark ?? false,
+                watermarkUrl: ref.read(authStateProvider).user?.avatarUrl,
+              ));
             },
           );
       }
@@ -990,6 +1021,15 @@ class _FolderExplorerScreenState extends ConsumerState<FolderExplorerScreen> {
           scopeLabel: folder.name,
         );
         Navigator.of(context).pushNamed(AppRoutes.faceSearchLanding);
+        break;
+      case _FolderAction.watermark:
+        try {
+          await ref.read(folderRepositoryProvider).updateFolder(folder.copyWith(showWatermark: !(folder.showWatermark ?? false)));
+          ref.invalidate(folderContentsProvider);
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Watermark ${!(folder.showWatermark ?? false) ? "enabled" : "disabled"} for folder')));
+        } catch (e) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        }
         break;
     }
   }
@@ -1195,7 +1235,7 @@ class _FolderExplorerScreenState extends ConsumerState<FolderExplorerScreen> {
 
 enum _ExplorerMenuAction { allAlbums }
 
-enum _FolderAction { rename, move, hide, share, download, delete, faceSearch }
+enum _FolderAction { rename, move, hide, share, download, delete, faceSearch, watermark }
 
 enum _AlbumAction { rename, move, share, download, faceSearch, delete }
 
@@ -1399,6 +1439,16 @@ class _FolderGridTile extends StatelessWidget {
               const PopupMenuItem(value: _FolderAction.hide, child: Text('Hide')),
               const PopupMenuItem(value: _FolderAction.share, child: Text('Share')),
               const PopupMenuItem(value: _FolderAction.download, child: Text('Download')),
+              PopupMenuItem(
+                value: _FolderAction.watermark, 
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Watermark'),
+                    if (folder.showWatermark == true) const Icon(Icons.check, size: 16, color: AppColors.primary),
+                  ],
+                ),
+              ),
               const PopupMenuItem(value: _FolderAction.faceSearch, child: Text('Face Search')),
               const PopupMenuItem(value: _FolderAction.delete, child: Text('Delete')),
             ],
@@ -1505,6 +1555,8 @@ class _MediaGridTile extends StatelessWidget {
     this.onTap,
     this.onLongPress,
     this.isSelected = false,
+    this.showWatermark = false,
+    this.watermarkUrl,
   });
 
   final MediaModel media;
@@ -1512,6 +1564,8 @@ class _MediaGridTile extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final bool isSelected;
+  final bool showWatermark;
+  final String? watermarkUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -1578,6 +1632,8 @@ class _MediaGridTile extends StatelessWidget {
               ],
             ),
           ),
+          if (showWatermark && watermarkUrl != null)
+            WatermarkOverlay(url: watermarkUrl!),
         ],
       ),
     );
